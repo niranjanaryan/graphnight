@@ -74,7 +74,7 @@ crates/
   graphnight-sql/        # dialects, generator, executor
   graphnight-storage/    # yaml, sqlite, tantivy
   graphnight-graphql/    # schema, resolvers, directives
-  graphnight-server/     # GraphQL server binary (Tide today)
+  graphnight-server/     # GraphQL server binary (Axum)
   graphnight-cli/        # CLI (init, query, model, …)
   graphnight-python/     # early PyO3 bindings
 examples/

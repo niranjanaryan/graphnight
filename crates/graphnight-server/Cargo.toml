@@ -15,8 +15,9 @@ graphnight-sql = { path = "../graphnight-sql" }
 graphnight-storage = { path = "../graphnight-storage" }
 graphnight-graphql = { path = "../graphnight-graphql" }
 async-graphql = { workspace = true }
-async-graphql-tide = { workspace = true }
-tide = { workspace = true }
+async-graphql-axum = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

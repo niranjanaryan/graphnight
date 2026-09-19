@@ -11,11 +11,11 @@ use graphnight_sql::SqlEngine;
 use graphnight_storage::StorageBackend;
 use std::sync::Arc;
 
+/// GraphQL schema type used by the HTTP server.
+pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
+
 /// Build the GraphQL schema
-pub fn build_schema(
-    sql_engine: Arc<SqlEngine>,
-    storage: Arc<dyn StorageBackend>,
-) -> Schema<QueryRoot, MutationRoot, SubscriptionRoot> {
+pub fn build_schema(sql_engine: Arc<SqlEngine>, storage: Arc<dyn StorageBackend>) -> AppSchema {
     Schema::build(
         QueryRoot::new(sql_engine.clone(), storage.clone()),
         MutationRoot::new(sql_engine.clone(), storage.clone()),

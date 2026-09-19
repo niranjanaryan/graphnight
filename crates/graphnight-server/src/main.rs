@@ -1,6 +1,14 @@
+use async_graphql::http::GraphiQLSource;
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::{
+    extract::State,
+    response::{Html, IntoResponse},
+    routing::get,
+    Router,
+};
 use clap::Parser;
 use graphnight_core::models::DataSource;
-use graphnight_graphql::build_schema;
+use graphnight_graphql::{build_schema, context::GraphQLContext, AppSchema};
 use graphnight_sql::{
     dialects::get_dialect,
     executor::{ConnectionManager, QueryExecutor},
@@ -8,6 +16,8 @@ use graphnight_sql::{
 };
 use graphnight_storage::{StorageBackend, YamlStorage};
 use std::sync::Arc;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -22,17 +32,17 @@ struct Args {
     #[arg(short, long, default_value = "graphnight.toml")]
     config: String,
 
-    /// Host to bind to
-    #[arg(long, default_value = "0.0.0.0")]
-    host: String,
+    /// Host to bind to (overrides config when set)
+    #[arg(long)]
+    host: Option<String>,
 
-    /// Port to bind to
-    #[arg(long, default_value = "8080")]
-    port: u16,
+    /// Port to bind to (overrides config when set)
+    #[arg(long)]
+    port: Option<u16>,
 
-    /// Storage path
-    #[arg(long, default_value = "./graphnight_data")]
-    storage_path: String,
+    /// Storage path (overrides config when set)
+    #[arg(long)]
+    storage_path: Option<String>,
 
     /// Log level
     #[arg(long, default_value = "info")]
@@ -68,26 +78,39 @@ struct DataSourceConfig {
     pool_size: Option<u32>,
 }
 
+/// Shared server state. Auth middleware (Track 3) will enrich per-request context
+/// in `graphql_handler` without replacing this process-wide schema.
+#[derive(Clone)]
+struct AppState {
+    schema: AppSchema,
+    sql_engine: Arc<SqlEngine>,
+    storage: Arc<dyn StorageBackend>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Initialize tracing
     let log_level = args.log_level.parse::<Level>().unwrap_or(Level::INFO);
     let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     info!("Starting GraphNight server...");
 
-    // Load config
     let config = load_config(&args.config).await?;
-
-    // Determine host and port
-    let host = config.server.host.as_deref().unwrap_or(&args.host);
-    let port = config.server.port.unwrap_or(args.port);
-
-    // Initialize storage
-    let storage_path = config.storage.path.as_deref().unwrap_or(&args.storage_path);
+    // Precedence: CLI flag > config file > built-in default
+    let host = args
+        .host
+        .as_deref()
+        .or(config.server.host.as_deref())
+        .unwrap_or("0.0.0.0");
+    let port = args.port.or(config.server.port).unwrap_or(8080);
+    let default_storage = "./graphnight_data".to_string();
+    let storage_path = args
+        .storage_path
+        .as_deref()
+        .or(config.storage.path.as_deref())
+        .unwrap_or(default_storage.as_str());
     let storage: Arc<dyn StorageBackend> =
         match config.storage.storage_type.as_deref().unwrap_or("yaml") {
             "yaml" => {
@@ -103,10 +126,8 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
-    // Initialize connection manager
     let conn_manager = Arc::new(ConnectionManager::new());
 
-    // Register datasources from config before building the SQL engine
     if let Some(datasources) = config.datasources {
         for (name, ds_config) in datasources {
             if storage.get_datasource(&name).await?.is_some() {
@@ -129,42 +150,57 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Create SQL engine with models from storage
     let dialect = get_dialect("postgres");
     let executor = Arc::new(QueryExecutor::new(conn_manager.clone()));
     let models = storage.list_models(None).await?;
     let sql_engine = Arc::new(SqlEngine::new(dialect, executor)?.with_models(models));
 
-    // Build GraphQL schema
     let schema = build_schema(sql_engine.clone(), storage.clone());
+    let state = AppState {
+        schema,
+        sql_engine,
+        storage,
+    };
 
-    // Create Tide app
-    let mut app = tide::with_state(schema.clone());
+    let app = Router::new()
+        .route("/graphql", get(graphiql).post(graphql_handler))
+        .route("/health", get(health))
+        .route("/metrics", get(metrics))
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::permissive())
+        .with_state(state);
 
-    // GraphQL endpoint
-    app.at("/graphql")
-        .post(async_graphql_tide::graphql(schema.clone()));
-    // GraphQL Playground not available in async-graphql-tide 7.x
-    // app.at("/graphql").get(async_graphql_tide::graphql_playground(...));
-
-    // Health check
-    app.at("/health").get(|_| async { Ok("OK") });
-
-    // Metrics endpoint
-    app.at("/metrics")
-        .get(|_| async { Ok("Metrics not implemented yet") });
-
-    // Start server
-    let addr = format!("{}:{}", host, port);
-    info!("Server listening on {}", addr);
-    app.listen(addr).await?;
+    let addr = format!("{host}:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    info!("Server listening on http://{addr}");
+    info!("GraphiQL: http://{addr}/graphql");
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
 
+/// GraphQL POST handler with a request-scoped context seam for future auth.
+async fn graphql_handler(State(state): State<AppState>, req: GraphQLRequest) -> GraphQLResponse {
+    // Track 3 will parse Authorization / X-API-Key here and call with_user / with_policy.
+    let request_ctx = GraphQLContext::new(state.sql_engine.clone(), state.storage.clone());
+    let request = req.into_inner().data(request_ctx);
+    state.schema.execute(request).await.into()
+}
+
+async fn graphiql() -> impl IntoResponse {
+    Html(GraphiQLSource::build().endpoint("/graphql").finish())
+}
+
+async fn health() -> &'static str {
+    "OK"
+}
+
+async fn metrics() -> &'static str {
+    "# GraphNight metrics placeholder\n# Prometheus exposition planned for v0.3\n"
+}
+
 async fn load_config(path: &str) -> anyhow::Result<Config> {
     if !std::path::Path::new(path).exists() {
-        // Return default config
         return Ok(Config {
             server: ServerConfig {
                 host: Some("0.0.0.0".to_string()),

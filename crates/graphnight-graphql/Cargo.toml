@@ -10,8 +10,6 @@ graphnight-core = { path = "../graphnight-core" }
 graphnight-sql = { path = "../graphnight-sql" }
 graphnight-storage = { path = "../graphnight-storage" }
 async-graphql = { workspace = true }
-async-graphql-tide = { workspace = true }
-tide = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }

@@ -11,7 +11,7 @@ This repository is an early public preview. Core query planning and SQL generati
 - Semantic models (measures, dimensions, time dimensions, joins)
 - Formula helpers (`sum`, `avg`, `count`, `time_shift`, `ratio`, …)
 - SQL generation for Postgres / MySQL / SQLite / DuckDB
-- GraphQL API + CLI (`graphnight init`, query dry-run, model list)
+- GraphQL API on **Axum** + CLI (`graphnight init`, query dry-run, model list)
 - YAML / SQLite metadata storage and Tantivy search
 - Session policy / RLS types in-library (**not yet enforced on the live request path**)
 
@@ -91,7 +91,7 @@ crates/
   graphnight-sql/          # SQL generator + sqlx executor
   graphnight-storage/      # YAML / SQLite / Tantivy
   graphnight-graphql/      # async-graphql schema
-  graphnight-server/       # Tide GraphQL server binary
+  graphnight-server/       # Axum GraphQL server binary
   graphnight-cli/          # CLI binary
   graphnight-python/       # PyO3 bindings (early)
 examples/                  # sample config + models
@@ -137,7 +137,8 @@ Apache License 2.0. See [LICENSE](LICENSE).
 
 Tracked in [LAUNCH.md](LAUNCH.md):
 
-1. **v0.1.0-alpha** — semantic core demo (formulas, joins, CLI init, honest stubs) — current
-2. **v0.2** — auth + `PolicyEnforcer` on the live path
-3. **v0.3-beta** — caching, benches, tide→axum
-4. **v1.0** — enterprise (RLS/audit/SSO) only when LAUNCH section B is green
+1. **v0.1.0-alpha** — semantic core demo (formulas, joins, CLI init, honest stubs) — shipped
+2. **Debt train** — sqlx 0.8 + Axum server — in progress on `main`
+3. **v0.2** — auth + `PolicyEnforcer` on the live path
+4. **v0.3-beta** — caching, streaming, benches
+5. **v1.0** — enterprise (RLS/audit/SSO) only when LAUNCH section B is green
