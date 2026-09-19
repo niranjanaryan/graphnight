@@ -20,9 +20,9 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 - [x] Example config / models / queries under `examples/`
 - [x] GitHub Actions CI (fmt / clippy / test / binary build)
 - [x] Engine sources committed on local `main`
-- [ ] Push local `main` to `origin/main`
-- [ ] Tag `v0.1.0-alpha` after push
-- [ ] GitHub description, topics (`semantic-layer`, `graphql`, `rust`), homepage
+- [x] Push local `main` to `origin/main`
+- [x] Tag `v0.1.0-alpha` after push
+- [x] GitHub description + topics (`semantic-layer`, `graphql`, `rust`, `sql`, `analytics`)
 - [x] Empty `api/` / placeholder dirs removed; workspace at repo root (`crates/`)
 - [x] Root `pyproject.toml` is a non-publishable workspace marker (Python = experimental)
 - [x] `CONTRIBUTING.md` + `SECURITY.md`
