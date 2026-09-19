@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "graphnight"
-version = "0.4.0"
+version = "1.0.0"
 description = "Embeddable semantic layer for AI agents and humans (Rust-backed Python bindings)"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -12,7 +12,7 @@ authors = [{ name = "GraphNight Team", email = "nirunitk@gmail.com" }]
 requires-python = ">=3.11"
 keywords = ["semantic-layer", "graphql", "sql", "analytics", "rust"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",

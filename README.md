@@ -1,10 +1,10 @@
 # GraphNight
 
-**Status: alpha (not production-ready)**
+**Status: 1.0.0**
 
 GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
 
-This repository is an early public preview. Core query planning and SQL generation work; authentication, enforced RLS, caching, and production ops are **not** ready for customer data. See [LAUNCH.md](LAUNCH.md) for the OSS and production checklists.
+See [LAUNCH.md](LAUNCH.md) for the full checklist. Remaining gaps (vault secret managers, some observability polish) are documented under Security notes in [CHANGELOG.md](CHANGELOG.md).
 
 ## Features (today)
 
@@ -13,8 +13,8 @@ This repository is an early public preview. Core query planning and SQL generati
 - SQL generation for Postgres / MySQL / SQLite / DuckDB
 - GraphQL API on **Axum** + CLI (`graphnight init`, query dry-run, model list)
 - YAML / SQLite / **Postgres** metadata storage (HA shared store) and Tantivy search (Postgres search is ILIKE-only)
-- Session policy / RLS types in-library (**not yet enforced on the live request path**)
-
+- API keys + **OIDC JWT** auth; `PolicyEnforcer` on the live query path (allow/deny, forced filters, RLS, max rows)
+- Plan/result caches, streaming executor, Docker, durable JSONL audit
 ## Quick start
 
 ### Requirements
@@ -154,7 +154,7 @@ Still do **not** expose this to the internet with production warehouse credentia
 pip install graphnight
 ```
 
-PyPI: https://pypi.org/project/graphnight/ (`0.4.0`)
+PyPI: https://pypi.org/project/graphnight/ (`1.0.0`)
 
 Bindings live under `crates/graphnight-python/` (Rust extension). Multi-platform wheels are built by `.github/workflows/wheels.yml` (Linux manylinux/musllinux, macOS, Windows) and published on version tags / manual dispatch. Optional: `pip install 'graphnight[pandas]'`.
 
@@ -180,9 +180,6 @@ Apache License 2.0. See [LICENSE](LICENSE).
 
 Tracked in [LAUNCH.md](LAUNCH.md):
 
-1. **v0.1.0-alpha** — semantic core demo (formulas, joins, CLI init, honest stubs) — shipped
-2. **Debt train** — sqlx 0.8 + Axum server — done on `main`
-3. **v0.2** — API-key auth + `PolicyEnforcer` on the live path — done on `main`
-4. **v0.3-beta** — plan/result cache, streaming executor, `/metrics`, Criterion benches — shipped
-5. **Production closeout (in progress on `main`)** — Docker, deep `/health`, durable audit, e2e, CORS + `env:` secret refs, OIDC JWT, Postgres metadata
-6. **Still open for v1.0** — vault integration; polish + release packaging
+1. **v0.1–v0.4** — alpha/beta trains (core → auth → cache → Docker/e2e)
+2. **v1.0.0** — OIDC JWT, HA Postgres metadata, Postgres testcontainers, multi-platform PyPI
+3. **Next** — vault/cloud secret managers, OpenTelemetry, MCP/REST, multi-stage DAG

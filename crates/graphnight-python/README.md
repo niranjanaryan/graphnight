@@ -2,12 +2,12 @@
 
 Python bindings for [GraphNight](https://github.com/niranjanaryan/graphnight) — an embeddable semantic layer for AI agents and humans.
 
-**Status: beta.** Auth, caching, and Docker exist on the Rust server; these bindings are a local YAML/SQL client surface and still evolving.
+**Status: 1.0.0.** Rust-backed local YAML/SQL client bindings. Server features (OIDC, HA metadata, Docker) live in the main repo binaries.
 
 ## Install
 
 ```bash
-pip install graphnight
+pip install graphnight==1.0.0
 ```
 
 ## Quick start
