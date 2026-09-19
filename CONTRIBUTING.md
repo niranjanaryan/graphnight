@@ -21,6 +21,17 @@ cargo test --workspace --exclude graphnight-python
 4. Update docs when user-facing behavior changes (`README.md`, `docs/`, `LAUNCH.md`).
 5. Do not claim production readiness for unfinished governance (auth/RLS/audit).
 
+### Python bindings
+
+Main CI excludes `graphnight-python`. After changing `crates/graphnight-python/`:
+
+```bash
+cd crates/graphnight-python
+maturin develop && pytest
+```
+
+See `crates/graphnight-python/README.md` and `examples/python/`.
+
 ## Project map
 
 | Path | Role |
@@ -30,7 +41,8 @@ cargo test --workspace --exclude graphnight-python
 | `crates/graphnight-storage` | YAML / SQLite / search |
 | `crates/graphnight-graphql` | GraphQL schema + resolvers |
 | `crates/graphnight-cli` / `graphnight-server` | Binaries |
-| `examples/` | Golden-path fixtures |
+| `crates/graphnight-python` | PyO3 bindings (`maturin develop && pytest`) |
+| `examples/` | Golden-path fixtures (+ `examples/python/`) |
 | `LAUNCH.md` | Release bars (OSS vs production) |
 
 ## Code style

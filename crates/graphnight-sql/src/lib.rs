@@ -44,6 +44,11 @@ impl SqlEngine {
         self
     }
 
+    /// Register or replace a model in the SQL generator registry.
+    pub fn register_model(&mut self, model: Model) {
+        self.generator.register_model(model);
+    }
+
     pub fn with_metrics(mut self, metrics: Arc<QueryMetrics>) -> Self {
         self.metrics = metrics;
         self

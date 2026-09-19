@@ -179,6 +179,14 @@ PyPI: https://pypi.org/project/graphnight/ (`1.0.0`)
 
 Bindings live under `crates/graphnight-python/` (Rust extension). Multi-platform wheels are built by `.github/workflows/wheels.yml` (Linux manylinux/musllinux, macOS, Windows) and published on version tags / manual dispatch. Optional: `pip install 'graphnight[pandas]'`.
 
+Local develop + tests (not in default CI):
+
+```bash
+cd crates/graphnight-python && maturin develop && pytest
+```
+
+Runnable scripts: [`examples/python/`](examples/python/).
+
 ## Development
 
 ```bash

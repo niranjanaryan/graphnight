@@ -95,3 +95,20 @@ jobs:
         with:
           name: graphnight-sbom
           path: graphnight.spdx.json
+
+  # Optional / manual: PyO3 bindings need maturin + Python 3.11+.
+  # Not run on every PR (disk/time). Documented in crates/graphnight-python/README.md.
+  # python-bindings:
+  #   name: Python bindings (maturin + pytest)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: "3.11" }
+  #     - run: pip install maturin pytest
+  #     - run: maturin develop
+  #       working-directory: crates/graphnight-python
+  #     - run: pytest
+  #       working-directory: crates/graphnight-python

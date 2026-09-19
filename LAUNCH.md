@@ -102,7 +102,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 
 - [ ] Stable versioned API + changelog
 - [ ] REST and/or MCP for agent integrations (as committed in blueprint)
-- [ ] Python package with working tests (or explicitly unsupported)
+- [x] Python package with working tests (or explicitly unsupported)
 - [ ] Importers or migration guides (dbt / Cube) as needed by customers
 - [ ] Support channel + security contact (`SECURITY.md`)
 

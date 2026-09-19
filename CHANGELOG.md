@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-process rate limiting via `GRAPHNIGHT_RATE_LIMIT_RPS` (per API key or client IP; `0`/unset disables; `429` + `Retry-After`; `/health` and `/metrics` exempt)
 - Ops runbook: `docs/runbook.md` (deploy, rollback, key/OIDC rotation, audit log, health/metrics, incidents)
 - CI job **SBOM / vulnerability scan**: `cargo audit` (`continue-on-error`) + Anchore SPDX SBOM artifact
+- Expanded docs: CLI/GraphQL/Python/auth/deploy guides under `docs/`
+- Richer `examples/` (auth curls, GraphQL ops, HA, query JSON, Python scripts)
+- Python client: sync `GraphNightClient` API with `dry_run_query`, richer
+  `create_model` / query formula parsing, pytest suite under
+  `crates/graphnight-python/tests/`, and `examples/python/` scripts
 
 ### Changed
 
