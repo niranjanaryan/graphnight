@@ -38,4 +38,3 @@ codedb.snapshot
 *.log
 coverage/
 lcov.info
-.env.exampl
