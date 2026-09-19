@@ -136,7 +136,7 @@ pip install graphnight
 
 PyPI: https://pypi.org/project/graphnight/ (`0.4.0`)
 
-Bindings live under `crates/graphnight-python/` (Rust extension). Prebuilt wheel is currently **macOS arm64**; other platforms build from the sdist (needs a Rust toolchain). Optional: `pip install 'graphnight[pandas]'`.
+Bindings live under `crates/graphnight-python/` (Rust extension). Multi-platform wheels are built by `.github/workflows/wheels.yml` (Linux manylinux/musllinux, macOS, Windows) and published on version tags / manual dispatch. Optional: `pip install 'graphnight[pandas]'`.
 
 ## Development
 

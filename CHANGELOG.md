@@ -37,8 +37,9 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - **`env:VARNAME` connection-string refs** resolved at pool connect; config startup validates refs
 - **`GRAPHNIGHT_REQUIRE_SECRET_REFS`** rejects raw connection strings on GraphQL datasource mutations
 - TLS guidance in `SECURITY.md` / `.env.example` (terminate at reverse proxy; no in-process TLS yet)
-- **PyPI** package [`graphnight` 0.4.0](https://pypi.org/project/graphnight/) (macOS arm64 wheel + sdist)
+- **PyPI** package [`graphnight` 0.4.0](https://pypi.org/project/graphnight/) (macOS arm64 wheel + sdist; CI builds more platforms)
 - GitHub Releases for `v0.1.0-alpha` … `v0.4.0-beta`
+- **Wheels CI** (`.github/workflows/wheels.yml`) for Linux/macOS/Windows via maturin-action
 
 ## [0.1.0-alpha] - 2026-09-20
 
