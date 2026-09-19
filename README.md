@@ -184,5 +184,5 @@ Tracked in [LAUNCH.md](LAUNCH.md):
 2. **Debt train** — sqlx 0.8 + Axum server — done on `main`
 3. **v0.2** — API-key auth + `PolicyEnforcer` on the live path — done on `main`
 4. **v0.3-beta** — plan/result cache, streaming executor, `/metrics`, Criterion benches — shipped
-5. **Production closeout (in progress on `main`)** — Docker, deep `/health`, durable audit, SQLite e2e, CORS + `env:` secret refs
-6. **Still open for v1.0** — OIDC/SSO, vault, Postgres warehouse testcontainers (metadata Postgres backend shipped; CRUD test `#[ignore]`d without Docker)
+5. **Production closeout (in progress on `main`)** — Docker, deep `/health`, durable audit, e2e, CORS + `env:` secret refs, OIDC JWT, Postgres metadata
+6. **Still open for v1.0** — vault integration; polish + release packaging

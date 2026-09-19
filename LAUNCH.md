@@ -89,7 +89,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 ### B3. Reliability & performance
 
 - [x] Integration / e2e tests: examples YAML → SQL dry-run + temp SQLite execute (`tests/e2e`, CI); GraphQL admin dry-run auth success
-- [ ] Integration tests against real Postgres/MySQL (testcontainers; stub ignored without Docker)
+- [x] Integration tests against real Postgres (testcontainers in CI; skip via `GRAPHNIGHT_SKIP_TESTCONTAINERS=1` or missing Docker); MySQL optional `#[ignore]`
 - [x] Connection pool acquire/idle + statement timeouts (Postgres/MySQL)
 - [x] Query plan cache + result cache with invalidation on model mutate
 - [x] Streaming fetch in executor (GraphQL still buffers each response payload)

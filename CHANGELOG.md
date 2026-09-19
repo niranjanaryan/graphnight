@@ -30,9 +30,11 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - Prometheus text metrics at `GET /metrics`
 - GraphQL WebSocket subscriptions at `/graphql/ws` (`liveQuery` polling, `modelChanges`)
 - Criterion benches: `cargo bench -p graphnight-sql`
-- **E2E crate** `tests/e2e` (`graphnight-e2e`): examples YAML load → SQL dry-run (Postgres + SQLite dialects) → execute against temp SQLite `orders` table; Postgres testcontainers stub `#[ignore]`d
+- **E2E crate** `tests/e2e` (`graphnight-e2e`): examples YAML load → SQL dry-run (Postgres + SQLite dialects) → execute against temp SQLite `orders` table
+- **Postgres testcontainers e2e** (CI on GHA Docker): start container, seed `orders`/`customers`, generate+execute SQL, assert revenue aggregates; skip with `GRAPHNIGHT_SKIP_TESTCONTAINERS=1` or when Docker is unavailable
+- **MySQL testcontainers e2e** (optional, `#[ignore]`): same pipeline; run with `cargo test -p graphnight-e2e -- --ignored`
 - GraphQL auth e2e: admin + `auth_required` succeeds on non-destructive dry-run query
-- CI step runs `cargo test -p graphnight-e2e`
+- CI step runs `cargo test -p graphnight-e2e` (includes testcontainers on GHA Docker)
 - **Dockerfile** + **docker-compose.yml** (multi-stage release build of `graphnight-server` + `graphnight` CLI; data volume; API key env)
 - Deep **`GET /health`** JSON (`storage` via `list_models`, open pool counts); returns **503** when storage fails
 - **`GRAPHNIGHT_CORS_ORIGINS`** (comma allowlist, `*` for open with warning; empty → localhost)

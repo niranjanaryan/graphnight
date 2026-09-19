@@ -1,6 +1,6 @@
 //! End-to-end: examples YAML → SQL dry-run → optional SQLite execute.
 //!
-//! Postgres/MySQL testcontainers are not required for CI; see ignored stub below.
+//! Postgres/MySQL live DB coverage lives in `pipeline_testcontainers.rs`.
 
 use graphnight_core::models::{DataSource, Query};
 use graphnight_sql::dialects::{PostgresDialect, SqliteDialect};
@@ -164,13 +164,4 @@ async fn examples_query_executes_against_temp_sqlite() {
         (completed - 35.5).abs() < 1e-6,
         "expected completed revenue 35.5, got {completed}; rows={rows:?}"
     );
-}
-
-/// Placeholder for future Postgres testcontainers coverage.
-/// Ignored by default so CI stays green without Docker.
-#[tokio::test]
-#[ignore = "requires Docker + testcontainers; enable locally with --ignored"]
-async fn postgres_testcontainers_placeholder() {
-    // Intentionally empty: wire testcontainers when Docker-in-CI is available.
-    // Until then, SQLite e2e above is the reliable integration path.
 }
