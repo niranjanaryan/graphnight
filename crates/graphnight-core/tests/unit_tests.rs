@@ -463,10 +463,7 @@ fn test_jsonl_audit_sink_roundtrip() {
     assert_eq!(loaded[0].model.as_deref(), Some("orders"));
     assert!(loaded[0].success);
     assert_eq!(loaded[1].success, false);
-    assert_eq!(
-        loaded[1].error.as_deref(),
-        Some("Model not found: users")
-    );
+    assert_eq!(loaded[1].error.as_deref(), Some("Model not found: users"));
     assert_eq!(loaded[2].row_count, Some(0));
 }
 

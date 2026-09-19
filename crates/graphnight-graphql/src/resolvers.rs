@@ -443,8 +443,7 @@ impl MutationRoot {
         input: CreateDatasourceInput,
     ) -> Result<DatasourceInfo> {
         require_admin_if_auth(ctx)?;
-        validate_connection_string_input(&input.connection_string)
-            .map_err(Error::new)?;
+        validate_connection_string_input(&input.connection_string).map_err(Error::new)?;
         let ds = DataSource {
             name: input.name.clone(),
             driver: input.driver,

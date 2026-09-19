@@ -5,8 +5,7 @@ use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::{info, warn};
 
 /// Default browser origins when `GRAPHNIGHT_CORS_ORIGINS` is unset or empty.
-pub const DEFAULT_LOCAL_ORIGINS: &[&str] =
-    &["http://127.0.0.1:8080", "http://localhost:8080"];
+pub const DEFAULT_LOCAL_ORIGINS: &[&str] = &["http://127.0.0.1:8080", "http://localhost:8080"];
 
 /// Build a `CorsLayer` from the environment.
 ///

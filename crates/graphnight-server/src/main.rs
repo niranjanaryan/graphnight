@@ -164,9 +164,8 @@ async fn main() -> anyhow::Result<()> {
             }
             // Keep env: refs as-is in storage; ConnectionManager resolves at connect.
             // Resolve once here so misconfigured refs fail at startup.
-            resolve_connection_string(&ds_config.connection_string).map_err(|e| {
-                anyhow::anyhow!("datasource '{name}' connection_string: {e}")
-            })?;
+            resolve_connection_string(&ds_config.connection_string)
+                .map_err(|e| anyhow::anyhow!("datasource '{name}' connection_string: {e}"))?;
             let ds = DataSource {
                 name,
                 driver: ds_config.driver,

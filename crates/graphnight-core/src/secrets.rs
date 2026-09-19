@@ -36,9 +36,7 @@ pub fn env_secret_var_name(value: &str) -> Option<&str> {
 pub fn resolve_connection_string(value: &str) -> Result<String, String> {
     if let Some(var) = env_secret_var_name(value) {
         env::var(var).map_err(|_| {
-            format!(
-                "secret reference env:{var} is set but environment variable '{var}' is missing"
-            )
+            format!("secret reference env:{var} is set but environment variable '{var}' is missing")
         })
     } else {
         Ok(value.to_string())
