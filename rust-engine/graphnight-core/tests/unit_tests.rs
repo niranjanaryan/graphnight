@@ -123,6 +123,16 @@ fn test_formula_parser_simple() {
 }
 
 #[test]
+fn test_formula_parser_rejects_unknown_aggregation() {
+    let parser = FormulaParser::new().unwrap();
+    let err = parser.parse_measure("revenue:nope").unwrap_err().to_string();
+    assert!(err.contains("unknown aggregation"));
+    assert!(parser.parse_measure("").is_err());
+    assert!(FormulaParser::needs_parse("revenue:sum"));
+    assert!(!FormulaParser::needs_parse("amount_usd"));
+}
+
+#[test]
 fn test_formula_parser_time_shift() {
     let parser = FormulaParser::new().unwrap();
 

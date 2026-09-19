@@ -33,6 +33,8 @@ impl ConnectionManager {
         let pool_size = ds.pool_size.unwrap_or(10) as u32;
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(pool_size)
+            .acquire_timeout(std::time::Duration::from_secs(30))
+            .idle_timeout(std::time::Duration::from_secs(600))
             .connect(&ds.connection_string)
             .await?;
 
@@ -51,6 +53,8 @@ impl ConnectionManager {
         let pool_size = ds.pool_size.unwrap_or(10) as u32;
         let pool = sqlx::mysql::MySqlPoolOptions::new()
             .max_connections(pool_size)
+            .acquire_timeout(std::time::Duration::from_secs(30))
+            .idle_timeout(std::time::Duration::from_secs(600))
             .connect(&ds.connection_string)
             .await?;
 
@@ -68,6 +72,7 @@ impl ConnectionManager {
 
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(1)
+            .acquire_timeout(std::time::Duration::from_secs(30))
             .connect(&ds.connection_string)
             .await?;
 

@@ -93,82 +93,19 @@ impl QueryRoot {
         })
     }
 
-    /// Execute multiple queries as a DAG
+    /// Execute multiple queries as a DAG.
+    ///
+    /// Alpha: true DAG / `stage_ref` execution is not implemented. Fails loudly
+    /// so clients do not treat a sequential stub as supported.
     async fn multi_stage_query(
         &self,
         _ctx: &Context<'_>,
-        inputs: Vec<QueryInput>,
-        dry_run: Option<bool>,
+        _inputs: Vec<QueryInput>,
+        _dry_run: Option<bool>,
     ) -> Result<MultiStageResponse> {
-        let start = std::time::Instant::now();
-        let mut responses = Vec::new();
-
-        for input in inputs {
-            let query: CoreQuery = input.into();
-
-            if dry_run.unwrap_or(false) {
-                let sql = self.sql_engine.generate_sql(&query)?;
-                responses.push(QueryResponse {
-                    data: vec![],
-                    columns: vec![],
-                    sql: Some(sql),
-                    attributes: None,
-                    population: None,
-                    population_inferred: false,
-                    execution_time_ms: 0.0,
-                });
-                continue;
-            }
-
-            let model_name = query
-                .name
-                .as_ref()
-                .or_else(|| query.source_model.as_ref().map(|s| &s.model))
-                .ok_or_else(|| Error::new("Query must have a name or source_model"))?;
-
-            let model = self
-                .storage
-                .get_model(model_name, None)
-                .await?
-                .ok_or_else(|| Error::new(format!("Model not found: {}", model_name)))?;
-
-            let datasource = self
-                .storage
-                .get_datasource(&model.datasource)
-                .await?
-                .ok_or_else(|| Error::new(format!("Datasource not found: {}", model.datasource)))?;
-
-            let results = self
-                .sql_engine
-                .execute_sqlx(&datasource, &self.sql_engine.generate_sql(&query)?)
-                .await?;
-
-            let columns = if !results.is_empty() {
-                results[0].keys().cloned().collect()
-            } else {
-                vec![]
-            };
-
-            let data: Vec<JsonValue> = results
-                .into_iter()
-                .map(|m| serde_json::to_value(m).unwrap())
-                .collect();
-
-            responses.push(QueryResponse {
-                data,
-                columns,
-                sql: Some(self.sql_engine.generate_sql(&query)?),
-                attributes: None,
-                population: None,
-                population_inferred: false,
-                execution_time_ms: 0.0,
-            });
-        }
-
-        Ok(MultiStageResponse {
-            results: responses,
-            execution_time_ms: start.elapsed().as_millis() as f64,
-        })
+        Err(Error::new(
+            "multiStageQuery is not supported in this alpha build (no DAG / stage_ref execution yet)",
+        ))
     }
 
     /// List all models
@@ -519,19 +456,17 @@ impl MutationRoot {
         Ok(ForgetMemoryResponse { success, id })
     }
 
-    /// Ingest models from a datasource
+    /// Ingest models from a datasource via warehouse introspection.
+    ///
+    /// Alpha: unsupported. Define models via YAML or `createModel`.
     async fn ingest_models(
         &self,
         _ctx: &Context<'_>,
         _datasource: String,
     ) -> Result<IngestionReport> {
-        // This would connect to the datasource and introspect tables
-        // For now, return a placeholder
-        Ok(IngestionReport {
-            models_created: 0,
-            models_updated: 0,
-            errors: vec!["Not implemented yet".to_string()],
-        })
+        Err(Error::new(
+            "ingestModels is not supported in this alpha build; define models via YAML or createModel",
+        ))
     }
 }
 

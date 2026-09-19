@@ -29,6 +29,30 @@ cd rust-engine
 cargo build --release -p graphnight-cli -p graphnight-server
 ```
 
+### Scaffold + dry-run (recommended)
+
+```bash
+cd rust-engine
+cargo run -p graphnight-cli -- init ../my-project
+cargo run -p graphnight-cli -- \
+  --storage-path ../my-project/graphnight_data \
+  query dry-run --file ../my-project/query.json
+```
+
+Or use the checked-in examples:
+
+```bash
+cargo run -p graphnight-cli -- \
+  --storage-path ../examples/data \
+  model list
+
+cargo run -p graphnight-cli -- \
+  --storage-path ../examples/data \
+  query dry-run --file ../examples/query.json
+```
+
+Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Concepts: [docs/concepts.md](docs/concepts.md).
+
 ### Run the server
 
 ```bash
@@ -40,15 +64,8 @@ cargo build --release -p graphnight-cli -p graphnight-server
   --port 8080
 ```
 
-Health check:
-
-```bash
-curl http://127.0.0.1:8080/health
-```
-
-GraphQL endpoint: `POST http://127.0.0.1:8080/graphql`
-
-### Dry-run a query (no database required)
+Health check: `curl http://127.0.0.1:8080/health`  
+GraphQL: `POST http://127.0.0.1:8080/graphql`
 
 ```bash
 curl http://127.0.0.1:8080/graphql \
@@ -60,8 +77,6 @@ curl http://127.0.0.1:8080/graphql \
 EOF
 ```
 
-Sample documents live under [`examples/`](examples/):
-
 | Path | Purpose |
 |------|---------|
 | `examples/graphnight.toml` | Server config |
@@ -69,19 +84,6 @@ Sample documents live under [`examples/`](examples/):
 | `examples/data/datasources.yaml` | Demo datasource |
 | `examples/query.json` | CLI query payload |
 | `examples/query.graphql` | GraphQL examples |
-
-### CLI
-
-```bash
-cd rust-engine
-cargo run -p graphnight-cli -- \
-  --storage-path ../examples/data \
-  model list
-
-cargo run -p graphnight-cli -- \
-  --storage-path ../examples/data \
-  query dry-run --file ../examples/query.json
-```
 
 ## Workspace layout
 
@@ -109,16 +111,20 @@ Alpha servers:
 
 Do not expose this process to the internet or attach production credentials.
 
+## Python
+
+Experimental PyO3 bindings live under `rust-engine/graphnight-python/`. They are **not** published to PyPI in this alpha. The root `pyproject.toml` is a workspace marker only.
+
 ## Development
 
 ```bash
 cd rust-engine
 cargo test --workspace --exclude graphnight-python
 cargo fmt --all -- --check
-cargo clippy --workspace --exclude graphnight-python -- -D warnings
+cargo clippy --workspace --exclude graphnight-python --all-targets
 ```
 
-CI runs the same test command on pushes and pull requests (see `.github/workflows/ci.yml`).
+CI runs unit/integration tests plus an example CLI dry-run (see `.github/workflows/ci.yml`).
 
 ## License
 
@@ -128,7 +134,7 @@ Apache License 2.0. See [LICENSE](LICENSE).
 
 Tracked in [LAUNCH.md](LAUNCH.md):
 
-1. Ship a usable OSS v0.1 (docs, CI, examples, alpha labeling) — in progress
-2. Enforce auth + `PolicyEnforcer` on every query
-3. Metrics, audit log, Docker, integration tests
-4. Caching, multi-stage DAG, MCP/REST — then production launch
+1. **v0.1.0-alpha** — semantic core demo (formulas, joins, CLI init, honest stubs) — current
+2. **v0.2** — auth + `PolicyEnforcer` on the live path
+3. **v0.3-beta** — caching, benches, tide→axum
+4. **v1.0** — enterprise (RLS/audit/SSO) only when LAUNCH section B is green

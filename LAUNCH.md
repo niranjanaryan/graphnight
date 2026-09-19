@@ -24,17 +24,21 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 - [ ] Tag `v0.1.0-alpha` after push
 - [ ] GitHub description, topics (`semantic-layer`, `graphql`, `rust`), homepage
 - [ ] Remove or clearly archive empty `api/` placeholder
-- [ ] Decide fate of root `pyproject.toml` (aspirational FastAPI vs Rust-only for now)
+- [x] Root `pyproject.toml` is a non-publishable workspace marker (Python = experimental)
 
 ### Product honesty
 
 - [x] README states auth/RLS not enforced on live path
-- [ ] Keep `ARCHITECTURE.md` as vision; mark unimplemented sections clearly
+- [x] `ARCHITECTURE.md` bannered as vision (not status)
 - [x] `tasks.txt` points at this file
+- [x] `ingestModels` / `multiStageQuery` fail loudly (unsupported in alpha)
+- [x] Formula parser + join walker wired into SQL generation
+- [x] CLI `graphnight init` + `docs/getting-started.md`
 
 ### Minimum quality gate
 
 - [x] `cargo test --workspace --exclude graphnight-python` passes locally
+- [x] Example YAML dry-run integration test
 - [ ] CI green on `main`
 - [x] Documented security warning for open GraphQL + connection strings
 

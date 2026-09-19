@@ -20,9 +20,25 @@ impl FormulaParser {
         })
     }
 
+    /// True when the expression uses shorthand or formula functions that need parsing.
+    pub fn needs_parse(expr: &str) -> bool {
+        let expr = expr.trim();
+        if expr.is_empty() {
+            return false;
+        }
+        expr.contains(':')
+            || expr.starts_with("time_shift(")
+            || expr.starts_with("ratio(")
+            || expr.starts_with("pct_change(")
+            || expr.starts_with("running_total(")
+    }
+
     /// Parse a measure expression like "revenue:sum" or "time_shift(revenue:sum, -1, 'year')"
     pub fn parse_measure(&self, expr: &str) -> Result<Measure> {
         let expr = expr.trim();
+        if expr.is_empty() {
+            return Err(anyhow!("Invalid formula: expression is empty"));
+        }
 
         // Check for time_shift
         if let Some(caps) = self.time_shift_regex.captures(expr) {
@@ -86,8 +102,13 @@ impl FormulaParser {
             "min" => Ok(AggregationType::Min),
             "max" => Ok(AggregationType::Max),
             "count_distinct" | "countd" => Ok(AggregationType::CountDistinct),
-            other => Ok(AggregationType::Custom(other.to_string())),
+            other => Err(anyhow!("Invalid formula: unknown aggregation '{}'", other)),
         }
+    }
+
+    /// True when a parsed measure expression is already dialect SQL (window/ratio).
+    pub fn is_compiled_sql(expression: &str) -> bool {
+        expression.contains(" OVER ") || expression.contains("NULLIF(") || expression.contains("::")
     }
 
     /// Parse time granularity from string

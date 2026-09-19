@@ -1,3 +1,5 @@
+mod commands;
+
 use clap::{Parser, Subcommand};
 use graphnight_core::models::{DataSource, Model, Query as CoreQuery};
 use graphnight_sql::{
@@ -6,6 +8,7 @@ use graphnight_sql::{
     SqlEngine,
 };
 use graphnight_storage::{Memory, MemoryFilter, StorageBackend, YamlStorage};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tabled::{Table, Tabled};
 use tracing::{info, Level};
@@ -36,6 +39,15 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Scaffold a starter project (config, sample models, query)
+    Init {
+        /// Target directory (default: current directory)
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        /// Overwrite existing files
+        #[arg(long)]
+        force: bool,
+    },
     /// Query commands
     Query {
         #[command(subcommand)]
@@ -228,6 +240,22 @@ async fn main() -> anyhow::Result<()> {
     let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
+    if let Commands::Init { dir, force } = &cli.command {
+        let path = commands::init::init_project(dir, *force)?;
+        println!("Initialized GraphNight project in {}", path.display());
+        println!("Next:");
+        println!(
+            "  graphnight --storage-path {}/graphnight_data model list",
+            path.display()
+        );
+        println!(
+            "  graphnight --storage-path {}/graphnight_data query dry-run --file {}/query.json",
+            path.display(),
+            path.display()
+        );
+        return Ok(());
+    }
+
     // Initialize storage
     let storage = Arc::new(YamlStorage::new(&cli.storage_path)?);
     storage.load().await?;
@@ -241,6 +269,7 @@ async fn main() -> anyhow::Result<()> {
     let sql_engine = Arc::new(SqlEngine::new(dialect, executor)?.with_models(models));
 
     match cli.command {
+        Commands::Init { .. } => unreachable!("handled above"),
         Commands::Query { action } => handle_query(action, &sql_engine, &storage_backend).await?,
         Commands::Model { action } => handle_model(action, &storage_backend).await?,
         Commands::Datasource { action } => handle_datasource(action, &storage_backend).await?,

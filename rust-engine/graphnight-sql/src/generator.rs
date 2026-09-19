@@ -1,8 +1,16 @@
 use anyhow::{anyhow, Result};
-use graphnight_core::models::{Formula, Measure, Model, Query};
+use graphnight_core::formula::FormulaParser;
+use graphnight_core::join::JoinWalker;
+use graphnight_core::models::{AggregationType, Measure, Model, Query};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use crate::dialects::Dialect;
+
+fn formula_parser() -> &'static FormulaParser {
+    static PARSER: OnceLock<FormulaParser> = OnceLock::new();
+    PARSER.get_or_init(|| FormulaParser::new().expect("FormulaParser"))
+}
 
 /// SQL Generator - converts semantic Query to dialect-specific SQL
 pub struct SqlGenerator {
@@ -141,24 +149,37 @@ impl SqlGenerator {
     }
 
     fn build_measure_expression(&self, measure: &Measure, source_alias: &str) -> Result<String> {
+        let expr = measure.formula.expression.trim();
+        let parser = formula_parser();
+
+        if FormulaParser::needs_parse(expr) {
+            if expr.starts_with("time_shift(") {
+                return self.build_time_shift_expression(expr, source_alias);
+            }
+            if expr.starts_with("ratio(") {
+                return self.build_ratio_expression(expr, source_alias);
+            }
+            if expr.starts_with("pct_change(") {
+                return self.build_pct_change_expression(expr, source_alias);
+            }
+            if expr.starts_with("running_total(") {
+                return self.build_running_total_expression(expr, source_alias);
+            }
+
+            // Shorthand like "revenue:sum"
+            let parsed = parser
+                .parse_measure(expr)
+                .map_err(|e| anyhow!("Invalid formula '{}': {}", expr, e))?;
+            return self.build_standard_aggregation(&parsed, source_alias);
+        }
+
+        self.build_standard_aggregation(measure, source_alias)
+    }
+
+    fn build_standard_aggregation(&self, measure: &Measure, source_alias: &str) -> Result<String> {
         let formula = &measure.formula;
-        let agg = measure.aggregation.clone();
+        let agg = &measure.aggregation;
 
-        // Handle special expressions like time_shift, ratio
-        if formula.expression.contains("time_shift") {
-            return self.build_time_shift_expression(formula, source_alias);
-        }
-        if formula.expression.contains("ratio") {
-            return self.build_ratio_expression(formula, source_alias);
-        }
-        if formula.expression.contains("pct_change") {
-            return self.build_pct_change_expression(formula, source_alias);
-        }
-        if formula.expression.contains("running_total") {
-            return self.build_running_total_expression(formula, source_alias);
-        }
-
-        // Build standard aggregation
         let column = if formula.expression == "*" {
             "*".to_string()
         } else {
@@ -170,47 +191,101 @@ impl SqlGenerator {
         };
 
         let agg_fn = agg.sql_function();
-        let expr = if agg.needs_closing_paren() {
-            format!("{}({})", agg_fn, column)
+        if agg.needs_closing_paren() {
+            Ok(format!("{}{})", agg_fn, column))
         } else {
-            format!("{}({})", agg_fn, column)
-        };
-
-        Ok(expr)
+            Ok(format!("{}({})", agg_fn, column))
+        }
     }
 
-    fn build_time_shift_expression(&self, formula: &Formula, source_alias: &str) -> Result<String> {
-        // Parse time_shift(expr, offset, 'granularity')
-        // This is a simplified version - in production would use proper parsing
+    fn aggregate_column(
+        &self,
+        field: &str,
+        aggregation: &AggregationType,
+        source_alias: &str,
+    ) -> String {
+        let column = if field == "*" {
+            "*".to_string()
+        } else {
+            format!("{}.{}", source_alias, self.dialect.quote_ident(field))
+        };
+        let agg_fn = aggregation.sql_function();
+        if aggregation.needs_closing_paren() {
+            format!("{}{})", agg_fn, column)
+        } else {
+            format!("{}({})", agg_fn, column)
+        }
+    }
+
+    fn build_time_shift_expression(&self, expr: &str, source_alias: &str) -> Result<String> {
+        let parser = formula_parser();
+        let re = regex::Regex::new(r"time_shift\(([^,]+),\s*(-?\d+),\s*'(\w+)'\)")
+            .map_err(|e| anyhow!(e))?;
+        let caps = re
+            .captures(expr)
+            .ok_or_else(|| anyhow!("Invalid formula: malformed time_shift expression"))?;
+        let inner = caps.get(1).unwrap().as_str().trim();
+        let inner_measure = parser.parse_measure(inner)?;
+        let inner_sql = self.aggregate_column(
+            &inner_measure.formula.expression,
+            &inner_measure.aggregation,
+            source_alias,
+        );
+        // ORDER BY uses the source alias as a stable key until time dims are required
         Ok(format!(
             "LAG({}) OVER (ORDER BY {})",
-            formula.expression, source_alias
+            inner_sql, source_alias
         ))
     }
 
-    fn build_ratio_expression(&self, formula: &Formula, _source_alias: &str) -> Result<String> {
-        // Parse ratio(num, denom)
-        Ok(formula.expression.replace("ratio(", "").replace(")", ""))
+    fn build_ratio_expression(&self, expr: &str, source_alias: &str) -> Result<String> {
+        let parser = formula_parser();
+        let re = regex::Regex::new(r"ratio\(([^,]+),\s*([^)]+)\)").map_err(|e| anyhow!(e))?;
+        let caps = re
+            .captures(expr)
+            .ok_or_else(|| anyhow!("Invalid formula: malformed ratio expression"))?;
+        let num = parser.parse_measure(caps.get(1).unwrap().as_str().trim())?;
+        let denom = parser.parse_measure(caps.get(2).unwrap().as_str().trim())?;
+        let num_sql =
+            self.aggregate_column(&num.formula.expression, &num.aggregation, source_alias);
+        let denom_sql =
+            self.aggregate_column(&denom.formula.expression, &denom.aggregation, source_alias);
+        Ok(format!("({} / NULLIF({}, 0))", num_sql, denom_sql))
     }
 
-    fn build_pct_change_expression(
-        &self,
-        formula: &Formula,
-        _source_alias: &str,
-    ) -> Result<String> {
-        // (current - previous) / previous * 100
-        Ok(format!("(({} - LAG({}) OVER (ORDER BY time_dim)) / NULLIF(LAG({}) OVER (ORDER BY time_dim), 0)) * 100", 
-            formula.expression, formula.expression, formula.expression))
-    }
-
-    fn build_running_total_expression(
-        &self,
-        formula: &Formula,
-        _source_alias: &str,
-    ) -> Result<String> {
+    fn build_pct_change_expression(&self, expr: &str, source_alias: &str) -> Result<String> {
+        let parser = formula_parser();
+        let inner = expr
+            .strip_prefix("pct_change(")
+            .and_then(|s| s.strip_suffix(')'))
+            .ok_or_else(|| anyhow!("Invalid formula: malformed pct_change expression"))?
+            .trim();
+        let measure = parser.parse_measure(inner)?;
+        let current = self.aggregate_column(
+            &measure.formula.expression,
+            &measure.aggregation,
+            source_alias,
+        );
         Ok(format!(
-            "SUM({}) OVER (ORDER BY time_dim ROWS UNBOUNDED PRECEDING)",
-            formula.expression
+            "(({current} - LAG({current}) OVER (ORDER BY {source_alias})) / NULLIF(LAG({current}) OVER (ORDER BY {source_alias}), 0)) * 100"
+        ))
+    }
+
+    fn build_running_total_expression(&self, expr: &str, source_alias: &str) -> Result<String> {
+        let parser = formula_parser();
+        let inner = expr
+            .strip_prefix("running_total(")
+            .and_then(|s| s.strip_suffix(')'))
+            .ok_or_else(|| anyhow!("Invalid formula: malformed running_total expression"))?
+            .trim();
+        let measure = parser.parse_measure(inner)?;
+        let inner_sql = self.aggregate_column(
+            &measure.formula.expression,
+            &measure.aggregation,
+            source_alias,
+        );
+        Ok(format!(
+            "SUM({inner_sql}) OVER (ORDER BY {source_alias} ROWS UNBOUNDED PRECEDING)"
         ))
     }
 
@@ -306,45 +381,68 @@ impl SqlGenerator {
     fn build_joins(
         &self,
         query: &Query,
-        _source_table: &str,
+        source_table: &str,
         source_alias: &str,
     ) -> Result<Vec<JoinClause>> {
-        let mut joins = Vec::new();
+        let base_model_name = query
+            .source_model
+            .as_ref()
+            .map(|s| s.model.as_str())
+            .or(query.name.as_deref())
+            .unwrap_or(source_table);
 
-        // If query has a model with joins, add them
-        if let Some(source) = &query.source_model {
-            if let Some(model) = self.model_registry.get(&source.model) {
-                for join in &model.joins {
-                    let joined_model = self
-                        .model_registry
-                        .get(&join.model)
-                        .ok_or_else(|| anyhow!("Joined model not found: {}", join.model))?;
+        let Some(model) = self.model_registry.get(base_model_name) else {
+            return Ok(vec![]);
+        };
 
-                    let join_alias = join.alias.clone().unwrap_or_else(|| join.model.clone());
-                    let join_type = join.join_type.sql_keyword();
-
-                    let mut on_conditions = Vec::new();
-                    for (left, right) in &join.on {
-                        on_conditions.push(format!(
-                            "{}.{} = {}.{}",
-                            source_alias,
-                            self.dialect.quote_ident(left),
-                            join_alias,
-                            self.dialect.quote_ident(right)
-                        ));
-                    }
-
-                    joins.push(JoinClause {
-                        join_type: join_type.to_string(),
-                        table: joined_model.name.clone(),
-                        alias: join_alias,
-                        on: on_conditions.join(" AND "),
-                    });
-                }
-            }
+        if model.joins.is_empty() {
+            return Ok(vec![]);
         }
 
-        Ok(joins)
+        let required: Vec<String> = model.joins.iter().map(|j| j.model.clone()).collect();
+        let models: Vec<Model> = self.model_registry.values().cloned().collect();
+        let walker = JoinWalker::new(models);
+        let clauses = walker
+            .build_join_clauses(base_model_name, &required, source_alias)
+            .map_err(|e| anyhow!("Join error: {}", e))?;
+
+        Ok(clauses
+            .into_iter()
+            .map(|c| JoinClause {
+                join_type: c.join_type,
+                table: c.table,
+                alias: c.alias,
+                on: self.quote_join_on(&c.on),
+            })
+            .collect())
+    }
+
+    /// Best-effort quoting for identifiers inside walker ON clauses (`a.b = c.d`).
+    fn quote_join_on(&self, on: &str) -> String {
+        on.split(" AND ")
+            .map(|cond| {
+                let parts: Vec<&str> = cond.split('=').map(|s| s.trim()).collect();
+                if parts.len() != 2 {
+                    return cond.to_string();
+                }
+                format!(
+                    "{} = {}",
+                    self.quote_qualified(parts[0]),
+                    self.quote_qualified(parts[1])
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ")
+    }
+
+    fn quote_qualified(&self, qualified: &str) -> String {
+        let mut parts = qualified.split('.');
+        match (parts.next(), parts.next()) {
+            (Some(alias), Some(col)) => {
+                format!("{}.{}", alias, self.dialect.quote_ident(col))
+            }
+            _ => self.dialect.quote_ident(qualified),
+        }
     }
 }
 

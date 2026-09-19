@@ -25,6 +25,9 @@ zstd-safe = { workspace = true }
 futures = { workspace = true }
 pin-project-lite = { workspace = true }
 tracing = { workspace = true }
+regex = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+graphnight-storage = { path = "../graphnight-storage" }
+tokio = { workspace = true }

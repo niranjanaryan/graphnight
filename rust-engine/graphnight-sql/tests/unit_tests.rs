@@ -311,6 +311,44 @@ fn test_or_condition() {
 }
 
 #[test]
+fn test_formula_shorthand_and_ratio() {
+    let model = create_test_model();
+    let dialect = PostgresDialect;
+    let generator = SqlGenerator::new(Box::new(dialect)).with_models(vec![model]);
+
+    let query = Query::new()
+        .with_name("orders")
+        .add_measure(Measure::new(
+            Formula::new("revenue:sum"),
+            AggregationType::Sum,
+        ))
+        .add_measure(Measure::new(
+            Formula::new("ratio(revenue:sum, order_count:count)"),
+            AggregationType::Avg,
+        ));
+
+    let sql = generator.generate(&query).unwrap();
+    assert!(sql.contains("SUM(orders.\"revenue\")"));
+    assert!(sql.contains("NULLIF"));
+    assert!(sql.contains("COUNT(orders.\"order_count\")"));
+}
+
+#[test]
+fn test_invalid_formula_rejected() {
+    let model = create_test_model();
+    let dialect = PostgresDialect;
+    let generator = SqlGenerator::new(Box::new(dialect)).with_models(vec![model]);
+
+    let query = Query::new().with_name("orders").add_measure(Measure::new(
+        Formula::new("revenue:not_a_real_agg"),
+        AggregationType::Sum,
+    ));
+
+    let err = generator.generate(&query).unwrap_err().to_string();
+    assert!(err.contains("Invalid formula"));
+}
+
+#[test]
 fn test_join_generation() {
     let orders = Model {
         name: "orders".to_string(),

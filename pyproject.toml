@@ -1,38 +1,19 @@
+# Root Python packaging is intentionally not published.
+# Experimental PyO3 bindings live in rust-engine/graphnight-python/.
+# This file exists only so tooling that looks for a root pyproject does not
+# assume a FastAPI app. Prefer the Rust CLI/server for the OSS alpha.
+
 [project]
-name = "graphnight"
+name = "graphnight-workspace"
 version = "0.1.0"
-description = "GraphQL semantic layer for spatial research"
+description = "GraphNight workspace marker (not a publishable package)"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
-    "strawberry-graphql>=0.256.0",
-    "pydantic>=2.6.0",
-    "sqlalchemy>=2.0.0",
-    "pandas>=2.2.0",
-    "pyyaml>=6.0",
-    "httpx>=0.26.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "ruff>=0.3.0",
-    "mypy>=1.8.0",
-]
+license = { text = "Apache-2.0" }
 
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
+[tool.setuptools]
+packages = []

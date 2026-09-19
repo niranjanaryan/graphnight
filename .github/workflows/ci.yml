@@ -59,3 +59,10 @@ jobs:
 
       - name: Build CLI and server
         run: cargo build -p graphnight-cli -p graphnight-server
+
+      - name: Example dry-run
+        working-directory: ${{ github.workspace }}
+        run: |
+          ./rust-engine/target/debug/graphnight \
+            --storage-path examples/data \
+            query dry-run --file examples/query.json

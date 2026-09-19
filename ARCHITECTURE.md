@@ -1,5 +1,8 @@
 # GraphNight Architecture Blueprint
 
+> **Vision document — not a status report.**  
+> Many modules, paths, and phases below describe the intended design. What ships today is a smaller alpha surface (YAML models, formula/join core, SQL generation, GraphQL query/dry-run, CLI). See [README.md](README.md) and [LAUNCH.md](LAUNCH.md) for current capability and release bars. Treat unchecked items in `LAUNCH.md` as not ready for production.
+
 ## Overview
 
 GraphNight is a high-performance, embeddable semantic layer for AI agents and humans, inspired by SLayer but built with Rust for performance and GraphQL for flexible querying. It enables governed, shared access to data and metrics across databases.
