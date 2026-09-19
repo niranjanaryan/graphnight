@@ -1,5 +1,5 @@
 use graphnight_core::models::Query;
-use graphnight_sql::dialects::PostgresDialect;
+use graphnight_sql::dialects::{PostgresDialect, SqliteDialect};
 use graphnight_sql::generator::SqlGenerator;
 use graphnight_storage::{StorageBackend, YamlStorage};
 use std::path::PathBuf;
@@ -26,7 +26,7 @@ async fn examples_yaml_loads_and_dry_run_sql() {
     let query_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/query.json");
     let query: Query = serde_json::from_str(&std::fs::read_to_string(query_path).unwrap()).unwrap();
 
-    let generator = SqlGenerator::new(Box::new(PostgresDialect)).with_models(models);
+    let generator = SqlGenerator::new(Box::new(PostgresDialect)).with_models(models.clone());
     let sql = generator.generate(&query).unwrap();
 
     assert!(sql.contains("SUM"));
@@ -34,4 +34,12 @@ async fn examples_yaml_loads_and_dry_run_sql() {
     assert!(sql.contains("\"amount_usd\"") || sql.contains("amount_usd"));
     assert!(sql.contains("GROUP BY"));
     assert!(sql.contains("LIMIT 100"));
+
+    // SQLite dialect dry-run for the same examples query (execute path lives in graphnight-e2e).
+    let sqlite_sql = SqlGenerator::new(Box::new(SqliteDialect))
+        .with_models(models)
+        .generate(&query)
+        .unwrap();
+    assert!(sqlite_sql.contains("SUM"));
+    assert!(sqlite_sql.contains("\"orders\""));
 }

@@ -34,6 +34,11 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude graphnight-python
 
+      # Explicit e2e crate (examples YAML → SQL dry-run → temp SQLite execute).
+      # Postgres/MySQL testcontainers remain ignored by default (no Docker required).
+      - name: E2E (SQLite pipeline)
+        run: cargo test -p graphnight-e2e -- --nocapture
+
   smoke:
     name: Build binaries
     runs-on: ubuntu-latest

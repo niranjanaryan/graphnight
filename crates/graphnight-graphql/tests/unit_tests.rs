@@ -152,6 +152,45 @@ async fn test_admin_required_for_datasource_create() {
     assert!(response.errors[0].message.contains("Admin"));
 }
 
+/// Admin + auth-required succeeds on a read-only dry-run (no mutations).
+#[tokio::test]
+async fn test_admin_auth_succeeds_dry_run_query() {
+    let (sql_engine, storage, _dir) = setup_test_env().await;
+    let schema = build_schema(sql_engine.clone(), storage.clone());
+    let ctx = GraphQLContext::new(sql_engine, storage)
+        .with_auth_required(true)
+        .with_user("admin".into(), Some("tenant-a".into()))
+        .with_admin(true);
+
+    let query = r#"
+        query {
+            query(dryRun: true, input: {
+                name: "orders"
+                measures: [{ formula: "revenue", aggregation: SUM }]
+                dimensions: [{ name: "status" }]
+                limit: 5
+            }) {
+                sql
+                data
+            }
+        }
+    "#;
+
+    let response = schema.execute(Request::new(query).data(ctx)).await;
+    assert!(
+        response.errors.is_empty(),
+        "admin dry-run should succeed: {:?}",
+        response.errors
+    );
+    let data = response.data.into_json().unwrap();
+    let sql = data["query"]["sql"].as_str().expect("sql field");
+    assert!(
+        sql.to_uppercase().contains("SELECT") && sql.to_uppercase().contains("SUM"),
+        "unexpected sql: {sql}"
+    );
+    assert!(data["query"]["data"].is_array());
+}
+
 #[tokio::test]
 async fn test_models_resolver() {
     let (sql_engine, storage, _dir) = setup_test_env().await;

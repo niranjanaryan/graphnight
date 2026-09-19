@@ -27,6 +27,9 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - Prometheus text metrics at `GET /metrics`
 - GraphQL WebSocket subscriptions at `/graphql/ws` (`liveQuery` polling, `modelChanges`)
 - Criterion benches: `cargo bench -p graphnight-sql`
+- **E2E crate** `tests/e2e` (`graphnight-e2e`): examples YAML load → SQL dry-run (Postgres + SQLite dialects) → execute against temp SQLite `orders` table; Postgres testcontainers stub `#[ignore]`d
+- GraphQL auth e2e: admin + `auth_required` succeeds on non-destructive dry-run query
+- CI step runs `cargo test -p graphnight-e2e`
 
 ## [0.1.0-alpha] - 2026-09-20
 
