@@ -51,8 +51,7 @@ cargo run -p graphnight-cli -- \
 
 More samples (auth curls, GraphQL docs, HA, ratio/join dry-runs): **[examples/README.md](examples/README.md)**.
 
-Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Concepts: [docs/concepts.md](docs/concepts.md).
-
+Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Full docs index: [docs/README.md](docs/README.md).
 ### Run the server
 
 ```bash
@@ -134,27 +133,41 @@ crates/
   graphnight-cli/          # CLI binary
   graphnight-python/       # PyO3 bindings (early)
 examples/                  # sample config, models, auth/GraphQL/HA usage
-docs/                      # getting started + concepts
+docs/                      # practical guides (see Docs below)
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP, Flight SQL, importers, caching). Many items there are vision-only.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP, Flight SQL, importers). Many items there are vision-only.
+
+## Docs
+
+| Doc | Contents |
+|-----|----------|
+| [docs/README.md](docs/README.md) | Docs index |
+| [docs/getting-started.md](docs/getting-started.md) | Build, init, dry-run, server, Docker, pip |
+| [docs/concepts.md](docs/concepts.md) | Models, auth modes, storage backends, caching |
+| [docs/usage-cli.md](docs/usage-cli.md) | CLI: init, model list, dry-run, serve tip |
+| [docs/usage-graphql.md](docs/usage-graphql.md) | curl, dryRun, auth headers, GraphiQL |
+| [docs/usage-python.md](docs/usage-python.md) | `pip install graphnight` + client examples |
+| [docs/auth.md](docs/auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant, `DEV_OPEN` |
+| [docs/deploy.md](docs/deploy.md) | Docker, compose HA, reverse-proxy TLS, env cheat sheet |
 
 ## Security
 
-By default (no API keys), GraphQL remains open for local demos and logs a warning.
+By default (no API keys / OIDC), GraphQL remains open for local demos and logs a warning.
 
 To require auth:
 
 ```bash
 export GRAPHNIGHT_API_KEYS='alice:secret1'
 export GRAPHNIGHT_ADMIN_KEYS='admin:adminsecret'
+# optional SSO: export GRAPHNIGHT_OIDC_ISSUER='https://login.example.com/realms/app'
 cargo run -p graphnight-server -- --host 127.0.0.1 --storage-path ./examples/data
 # curl -H 'Authorization: Bearer secret1' ...
 ```
 
-When keys are set: anonymous requests fail; queries use `PolicyEnforcer`; datasource/model writes need an admin key. See [SECURITY.md](SECURITY.md) for CORS (`GRAPHNIGHT_CORS_ORIGINS`), TLS (terminate at a reverse proxy), and `env:VARNAME` datasource secret refs.
+When keys or OIDC are set: anonymous requests fail; queries use `PolicyEnforcer`; datasource/model writes need an admin identity. See [docs/auth.md](docs/auth.md) and [SECURITY.md](SECURITY.md) for CORS (`GRAPHNIGHT_CORS_ORIGINS`), TLS (terminate at a reverse proxy), and `env:VARNAME` datasource secret refs.
 
-Still do **not** expose this to the internet with production warehouse credentials (no OIDC/SSO, audit is not durable yet).
+Still do **not** expose this to the internet with production warehouse credentials. Vault integrations and some policy edges (column masks, full query timeout) remain incomplete — see [CHANGELOG.md](CHANGELOG.md).
 
 ## Python
 
