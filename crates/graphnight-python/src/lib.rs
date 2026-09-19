@@ -344,9 +344,7 @@ impl GraphNightClient {
             .runtime
             .block_on(storage.get_datasource(&model.datasource))
             .map_err(|e| runtime_error(e))?
-            .ok_or_else(|| {
-                runtime_error(format!("Datasource not found: {}", model.datasource))
-            })?;
+            .ok_or_else(|| runtime_error(format!("Datasource not found: {}", model.datasource)))?;
 
         let engine = self
             .sql_engine

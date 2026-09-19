@@ -251,9 +251,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .layer(
-            TraceLayer::new_for_http().make_span_with(|req: &axum::extract::Request| {
-                make_trace_span(req)
-            }),
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &axum::extract::Request| make_trace_span(req)),
         )
         .layer(middleware::from_fn(request_id_middleware))
         .layer(middleware::from_fn_with_state(

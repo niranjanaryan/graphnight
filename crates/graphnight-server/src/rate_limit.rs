@@ -52,9 +52,7 @@ impl RateLimitState {
                 None
             }
             Err(_) => {
-                warn!(
-                    "GRAPHNIGHT_RATE_LIMIT_RPS={raw} is not a number; rate limiting disabled"
-                );
+                warn!("GRAPHNIGHT_RATE_LIMIT_RPS={raw} is not a number; rate limiting disabled");
                 None
             }
         }
