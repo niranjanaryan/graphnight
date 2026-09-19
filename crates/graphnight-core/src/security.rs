@@ -202,7 +202,7 @@ impl PolicyEnforcer {
 }
 
 /// Audit log entry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuditEntry {
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub user_id: Option<String>,
@@ -216,7 +216,61 @@ pub struct AuditEntry {
     pub error: Option<String>,
 }
 
-/// Audit logger
+/// Durable audit destination (Sync + Send for async GraphQL resolvers).
+pub trait AuditSink: Send + Sync {
+    fn write(&self, entry: &AuditEntry) -> std::io::Result<()>;
+}
+
+/// Append-only JSONL audit sink (`GRAPHNIGHT_AUDIT_LOG`).
+pub struct JsonlAuditSink {
+    file: parking_lot::Mutex<std::fs::File>,
+    path: std::path::PathBuf,
+}
+
+impl JsonlAuditSink {
+    pub const DEFAULT_PATH: &'static str = "./graphnight_data/audit.jsonl";
+
+    pub fn open(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?;
+        Ok(Self {
+            file: parking_lot::Mutex::new(file),
+            path,
+        })
+    }
+
+    /// `GRAPHNIGHT_AUDIT_LOG`, or [`Self::DEFAULT_PATH`] when unset.
+    pub fn from_env() -> std::io::Result<Self> {
+        let path = std::env::var("GRAPHNIGHT_AUDIT_LOG")
+            .unwrap_or_else(|_| Self::DEFAULT_PATH.to_string());
+        Self::open(path)
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
+
+impl AuditSink for JsonlAuditSink {
+    fn write(&self, entry: &AuditEntry) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut line = serde_json::to_string(entry)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        line.push('\n');
+        let mut file = self.file.lock();
+        file.write_all(line.as_bytes())?;
+        file.flush()?;
+        Ok(())
+    }
+}
+
+/// In-memory audit logger (tests / short-lived buffers).
 pub struct AuditLogger {
     entries: Vec<AuditEntry>,
     max_entries: usize,

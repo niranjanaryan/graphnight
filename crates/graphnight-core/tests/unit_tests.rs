@@ -1,7 +1,9 @@
 use graphnight_core::formula::{FormulaParser, FormulaRegistry};
 use graphnight_core::join::{JoinGraph, JoinWalker};
 use graphnight_core::models::*;
-use graphnight_core::security::{masks, AuditEntry, AuditLogger, PolicyEnforcer, SessionPolicy};
+use graphnight_core::security::{
+    masks, AuditEntry, AuditLogger, AuditSink, JsonlAuditSink, PolicyEnforcer, SessionPolicy,
+};
 use pretty_assertions::assert_eq;
 use serde_json::json;
 
@@ -398,6 +400,74 @@ fn test_audit_logger() {
     });
 
     assert_eq!(logger.get_entries().len(), 2); // Max 2 entries
+}
+
+#[test]
+fn test_jsonl_audit_sink_roundtrip() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("audit.jsonl");
+    let sink = JsonlAuditSink::open(&path).unwrap();
+
+    let entries = vec![
+        AuditEntry {
+            timestamp: chrono::Utc::now(),
+            user_id: Some("alice".into()),
+            tenant_id: Some("t1".into()),
+            action: "query".into(),
+            model: Some("orders".into()),
+            query_hash: None,
+            row_count: Some(3),
+            duration_ms: 12,
+            success: true,
+            error: None,
+        },
+        AuditEntry {
+            timestamp: chrono::Utc::now(),
+            user_id: Some("bob".into()),
+            tenant_id: None,
+            action: "query".into(),
+            model: Some("users".into()),
+            query_hash: None,
+            row_count: None,
+            duration_ms: 5,
+            success: false,
+            error: Some("Model not found: users".into()),
+        },
+        AuditEntry {
+            timestamp: chrono::Utc::now(),
+            user_id: None,
+            tenant_id: None,
+            action: "query".into(),
+            model: Some("orders".into()),
+            query_hash: None,
+            row_count: Some(0),
+            duration_ms: 1,
+            success: true,
+            error: None,
+        },
+    ];
+
+    for entry in &entries {
+        sink.write(entry).unwrap();
+    }
+
+    let raw = std::fs::read_to_string(&path).unwrap();
+    let loaded: Vec<AuditEntry> = raw
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+
+    assert_eq!(loaded.len(), 3);
+    assert_eq!(loaded[0].user_id.as_deref(), Some("alice"));
+    assert_eq!(loaded[0].model.as_deref(), Some("orders"));
+    assert!(loaded[0].success);
+    assert_eq!(loaded[1].success, false);
+    assert_eq!(
+        loaded[1].error.as_deref(),
+        Some("Model not found: users")
+    );
+    assert_eq!(loaded[2].row_count, Some(0));
 }
 
 #[test]

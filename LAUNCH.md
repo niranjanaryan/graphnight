@@ -67,7 +67,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 - [ ] TLS (terminate at proxy or in-process); CORS is permissive today
 - [ ] Rate limiting that actually enforces quotas
 - [ ] Parameterized / safely bound SQL values; SQL injection review
-- [ ] Durable audit log (tracing only today)
+- [x] Durable audit log (JSONL via `GRAPHNIGHT_AUDIT_LOG`, default `./graphnight_data/audit.jsonl`)
 
 ### B2. Observability & ops
 

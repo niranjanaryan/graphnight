@@ -25,10 +25,19 @@ When keys are configured (and `GRAPHNIGHT_DEV_OPEN` is not set):
 - Datasource/model write mutations require an **admin** key
 - Queries run through `PolicyEnforcer` (allow/deny lists, forced filters, RLS, max rows)
 
+## Durable audit log
+
+Successful and failed GraphQL `query` executions append JSONL `AuditEntry` records (user, tenant, model, row count, duration, success/error).
+
+```bash
+# default: ./graphnight_data/audit.jsonl
+export GRAPHNIGHT_AUDIT_LOG=/var/log/graphnight/audit.jsonl
+```
+
 ## Remaining risks
 
 - Default without keys is still **open** (dev convenience) — set keys before any shared deployment
-- Audit log is tracing-only (not durable)
+- Audit is append-only JSONL (no tamper-evidence / central shipping yet)
 - No OIDC/SSO yet
 - Do not expose a GraphNight server to the public internet with production warehouse credentials
 

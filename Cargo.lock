@@ -1587,6 +1587,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sqlx",
+ "tempfile",
  "thiserror 1.0.69",
  "uuid",
 ]

@@ -1,4 +1,4 @@
-use graphnight_core::security::SessionPolicy;
+use graphnight_core::security::{AuditSink, SessionPolicy};
 use graphnight_sql::SqlEngine;
 use graphnight_storage::StorageBackend;
 use std::sync::Arc;
@@ -13,6 +13,8 @@ pub struct GraphQLContext {
     pub is_admin: bool,
     /// When true, anonymous requests must be rejected by resolvers.
     pub auth_required: bool,
+    /// Durable audit sink (JSONL file, etc.).
+    pub audit_sink: Option<Arc<dyn AuditSink>>,
 }
 
 impl GraphQLContext {
@@ -25,6 +27,7 @@ impl GraphQLContext {
             tenant_id: None,
             is_admin: false,
             auth_required: false,
+            audit_sink: None,
         }
     }
 
@@ -46,6 +49,11 @@ impl GraphQLContext {
 
     pub fn with_auth_required(mut self, required: bool) -> Self {
         self.auth_required = required;
+        self
+    }
+
+    pub fn with_audit_sink(mut self, sink: Arc<dyn AuditSink>) -> Self {
+        self.audit_sink = Some(sink);
         self
     }
 }

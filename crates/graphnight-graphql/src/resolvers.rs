@@ -1,14 +1,16 @@
 use crate::auth::{
     enforce_policy, reject_if_auth_required, require_admin_if_auth, require_user_if_auth,
 };
+use crate::context::GraphQLContext;
 use crate::schema::JsonValue;
 use crate::schema::*;
 use async_graphql::*;
 use graphnight_core::models::{DataSource, Model, Query as CoreQuery};
+use graphnight_core::security::AuditEntry;
 use graphnight_sql::SqlEngine;
 use graphnight_storage::StorageBackend;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 
 /// GraphQL Query resolvers
 pub struct QueryRoot {
@@ -23,20 +25,16 @@ impl QueryRoot {
             storage,
         }
     }
-}
 
-#[Object]
-impl QueryRoot {
-    /// Execute a semantic query
-    async fn query(
+    async fn execute_query(
         &self,
         ctx: &Context<'_>,
         input: QueryInput,
         dry_run: Option<bool>,
-        _explain: Option<bool>,
+        start: std::time::Instant,
+        model_name_out: &mut Option<String>,
     ) -> Result<QueryResponse> {
         reject_if_auth_required(ctx)?;
-        let start = std::time::Instant::now();
         let mut query: CoreQuery = input.into();
 
         let model_name = query
@@ -45,6 +43,7 @@ impl QueryRoot {
             .or_else(|| query.source_model.as_ref().map(|s| &s.model))
             .ok_or_else(|| Error::new("Query must have a name or source_model"))?
             .clone();
+        *model_name_out = Some(model_name.clone());
 
         let model = self
             .storage
@@ -104,6 +103,54 @@ impl QueryRoot {
             population_inferred: false,
             execution_time_ms: start.elapsed().as_millis() as f64,
         })
+    }
+}
+
+#[Object]
+impl QueryRoot {
+    /// Execute a semantic query
+    async fn query(
+        &self,
+        ctx: &Context<'_>,
+        input: QueryInput,
+        dry_run: Option<bool>,
+        _explain: Option<bool>,
+    ) -> Result<QueryResponse> {
+        let start = std::time::Instant::now();
+        let gql = ctx.data::<GraphQLContext>().ok();
+        let user_id = gql.and_then(|g| g.user_id.clone());
+        let tenant_id = gql.and_then(|g| g.tenant_id.clone());
+        let audit_sink = gql.and_then(|g| g.audit_sink.clone());
+
+        let mut model_name: Option<String> = None;
+        let result = self
+            .execute_query(ctx, input, dry_run, start, &mut model_name)
+            .await;
+
+        if let Some(sink) = audit_sink {
+            let duration_ms = start.elapsed().as_millis() as u64;
+            let (success, row_count, error) = match &result {
+                Ok(resp) => (true, Some(resp.data.len()), None),
+                Err(e) => (false, None, Some(e.message.clone())),
+            };
+            let entry = AuditEntry {
+                timestamp: chrono::Utc::now(),
+                user_id,
+                tenant_id,
+                action: "query".to_string(),
+                model: model_name,
+                query_hash: None,
+                row_count,
+                duration_ms,
+                success,
+                error,
+            };
+            if let Err(e) = sink.write(&entry) {
+                warn!(error = %e, "failed to write durable audit entry");
+            }
+        }
+
+        result
     }
 
     /// Execute multiple queries as a DAG.

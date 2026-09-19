@@ -12,6 +12,7 @@ use axum::{
 };
 use clap::Parser;
 use graphnight_core::models::DataSource;
+use graphnight_core::security::{AuditSink, JsonlAuditSink};
 use graphnight_graphql::{build_schema, context::GraphQLContext, AppSchema};
 use graphnight_sql::{
     dialects::get_dialect,
@@ -89,6 +90,7 @@ struct AppState {
     sql_engine: Arc<SqlEngine>,
     storage: Arc<dyn StorageBackend>,
     auth: AuthConfig,
+    audit_sink: Arc<dyn AuditSink>,
 }
 
 #[tokio::main]
@@ -173,11 +175,16 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let jsonl_audit = JsonlAuditSink::from_env()?;
+    info!(path = %jsonl_audit.path().display(), "Durable audit log enabled");
+    let audit_sink: Arc<dyn AuditSink> = Arc::new(jsonl_audit);
+
     let state = AppState {
         schema,
         sql_engine,
         storage,
         auth,
+        audit_sink,
     };
 
     let schema_for_ws = state.schema.clone();
@@ -216,7 +223,8 @@ async fn graphql_handler(
 
     let mut request_ctx = GraphQLContext::new(state.sql_engine.clone(), state.storage.clone())
         .with_auth_required(state.auth.auth_required)
-        .with_policy(state.auth.default_policy(identity.as_ref()));
+        .with_policy(state.auth.default_policy(identity.as_ref()))
+        .with_audit_sink(state.audit_sink.clone());
 
     if let Some(id) = identity {
         request_ctx = request_ctx

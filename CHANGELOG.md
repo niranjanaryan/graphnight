@@ -21,6 +21,7 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - **`PolicyEnforcer` on the live query path** (model/datasource allowlists, forced filters, RLS, max rows)
 - Admin gates on datasource/model mutations when auth is required
 - Tenant hint via `X-Tenant-Id` → forced `tenant_id` filter
+- **Durable JSONL audit log** (`GRAPHNIGHT_AUDIT_LOG`, default `./graphnight_data/audit.jsonl`) on GraphQL `query` success/failure
 - **Plan cache** (LRU) and **result cache** (LRU + TTL) in `SqlEngine`
 - **Row streaming** executor (`sqlx::fetch`) with Postgres/MySQL statement timeouts
 - Prometheus text metrics at `GET /metrics`
