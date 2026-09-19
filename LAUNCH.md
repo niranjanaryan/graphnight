@@ -53,20 +53,21 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 
 ### B1. Security (hard blockers)
 
-- [ ] AuthN middleware (API key / JWT / OIDC) populates `user_id` / `tenant_id`
-- [ ] AuthZ on every query and mutation (fail closed)
-- [ ] Wire `PolicyEnforcer` into GraphQL/CLI execute path:
-  - [ ] model / datasource allowlists
-  - [ ] forced filters
-  - [ ] RLS `row_filter`
-  - [ ] max rows + query timeout
+- [x] AuthN middleware (API key) populates `user_id` / `tenant_id` / `is_admin`
+- [x] AuthZ when keys configured (fail closed); open mode only without keys or with `GRAPHNIGHT_DEV_OPEN=1`
+- [x] Wire `PolicyEnforcer` into GraphQL execute path:
+  - [x] model / datasource allowlists
+  - [x] forced filters
+  - [x] RLS `row_filter`
+  - [x] max rows
+  - [ ] query timeout enforced end-to-end
   - [ ] column masks on response
-- [ ] Lock down datasource mutations (admin-only; no raw secrets from clients)
+- [x] Lock down datasource/model mutations (admin-only when auth required)
 - [ ] Secret references (env / vault) instead of plaintext connection strings in APIs
-- [ ] TLS (terminate at proxy or in-process); explicit CORS policy
+- [ ] TLS (terminate at proxy or in-process); CORS is permissive today
 - [ ] Rate limiting that actually enforces quotas
 - [ ] Parameterized / safely bound SQL values; SQL injection review
-- [ ] Durable audit log (not in-memory only)
+- [ ] Durable audit log (tracing only today)
 
 ### B2. Observability & ops
 

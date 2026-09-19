@@ -1,7 +1,11 @@
+mod auth_config;
+
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use auth_config::{extract_api_key, extract_tenant, AuthConfig};
 use axum::{
     extract::State,
+    http::HeaderMap,
     response::{Html, IntoResponse},
     routing::get,
     Router,
@@ -18,7 +22,7 @@ use graphnight_storage::{StorageBackend, YamlStorage};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing::{info, Level};
+use tracing::{info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Parser, Debug)]
@@ -78,13 +82,13 @@ struct DataSourceConfig {
     pool_size: Option<u32>,
 }
 
-/// Shared server state. Auth middleware (Track 3) will enrich per-request context
-/// in `graphql_handler` without replacing this process-wide schema.
+/// Shared server state. Per-request identity is injected in `graphql_handler`.
 #[derive(Clone)]
 struct AppState {
     schema: AppSchema,
     sql_engine: Arc<SqlEngine>,
     storage: Arc<dyn StorageBackend>,
+    auth: AuthConfig,
 }
 
 #[tokio::main]
@@ -156,10 +160,24 @@ async fn main() -> anyhow::Result<()> {
     let sql_engine = Arc::new(SqlEngine::new(dialect, executor)?.with_models(models));
 
     let schema = build_schema(sql_engine.clone(), storage.clone());
+    let auth = AuthConfig::from_env();
+    if auth.auth_required {
+        info!(
+            "Auth required ({} API keys configured)",
+            auth.api_keys.len()
+        );
+    } else {
+        warn!(
+            "GraphQL auth is OPEN. Set GRAPHNIGHT_API_KEYS / GRAPHNIGHT_ADMIN_KEYS \
+             (or GRAPHNIGHT_AUTH_REQUIRED=1). Use GRAPHNIGHT_DEV_OPEN=1 to silence this."
+        );
+    }
+
     let state = AppState {
         schema,
         sql_engine,
         storage,
+        auth,
     };
 
     let app = Router::new()
@@ -179,10 +197,26 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// GraphQL POST handler with a request-scoped context seam for future auth.
-async fn graphql_handler(State(state): State<AppState>, req: GraphQLRequest) -> GraphQLResponse {
-    // Track 3 will parse Authorization / X-API-Key here and call with_user / with_policy.
-    let request_ctx = GraphQLContext::new(state.sql_engine.clone(), state.storage.clone());
+/// GraphQL POST handler: resolve identity from headers into request-scoped context.
+async fn graphql_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    let api_key = extract_api_key(&headers);
+    let tenant_id = extract_tenant(&headers);
+    let identity = state.auth.authenticate(api_key.as_deref(), tenant_id);
+
+    let mut request_ctx = GraphQLContext::new(state.sql_engine.clone(), state.storage.clone())
+        .with_auth_required(state.auth.auth_required)
+        .with_policy(state.auth.default_policy(identity.as_ref()));
+
+    if let Some(id) = identity {
+        request_ctx = request_ctx
+            .with_user(id.user_id, id.tenant_id)
+            .with_admin(id.is_admin);
+    }
+
     let request = req.into_inner().data(request_ctx);
     state.schema.execute(request).await.into()
 }

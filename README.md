@@ -100,16 +100,22 @@ docs/                      # getting started + concepts
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP, Flight SQL, importers, caching). Many items there are vision-only.
 
-## Security warning
+## Security
 
-Alpha servers:
+By default (no API keys), GraphQL remains open for local demos and logs a warning.
 
-- Bind openly unless you pass `--host 127.0.0.1`
-- Expose GraphQL **without authentication**
-- Accept datasource `connection_string` values via mutations
-- Do **not** apply row-level security on the live query path yet
+To require auth:
 
-Do not expose this process to the internet or attach production credentials.
+```bash
+export GRAPHNIGHT_API_KEYS='alice:secret1'
+export GRAPHNIGHT_ADMIN_KEYS='admin:adminsecret'
+cargo run -p graphnight-server -- --host 127.0.0.1 --storage-path ./examples/data
+# curl -H 'Authorization: Bearer secret1' ...
+```
+
+When keys are set: anonymous requests fail; queries use `PolicyEnforcer`; datasource/model writes need an admin key. See [SECURITY.md](SECURITY.md).
+
+Still do **not** expose this to the internet with production warehouse credentials (no OIDC/SSO, audit is not durable yet).
 
 ## Python
 
@@ -138,7 +144,7 @@ Apache License 2.0. See [LICENSE](LICENSE).
 Tracked in [LAUNCH.md](LAUNCH.md):
 
 1. **v0.1.0-alpha** — semantic core demo (formulas, joins, CLI init, honest stubs) — shipped
-2. **Debt train** — sqlx 0.8 + Axum server — in progress on `main`
-3. **v0.2** — auth + `PolicyEnforcer` on the live path
+2. **Debt train** — sqlx 0.8 + Axum server — done on `main`
+3. **v0.2** — API-key auth + `PolicyEnforcer` on the live path — done on `main`
 4. **v0.3-beta** — caching, streaming, benches
-5. **v1.0** — enterprise (RLS/audit/SSO) only when LAUNCH section B is green
+5. **v1.0** — OIDC/SSO, durable audit, production ops when LAUNCH section B is green

@@ -17,7 +17,10 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 ### Added
 
 - Root `CHANGELOG.md`
-- Request-scoped GraphQL context seam in the Axum handler (for upcoming auth)
+- **API key auth** (`GRAPHNIGHT_API_KEYS` / `GRAPHNIGHT_ADMIN_KEYS`) with request-scoped GraphQL context
+- **`PolicyEnforcer` on the live query path** (model/datasource allowlists, forced filters, RLS, max rows)
+- Admin gates on datasource/model mutations when auth is required
+- Tenant hint via `X-Tenant-Id` → forced `tenant_id` filter
 
 ## [0.1.0-alpha] - 2026-09-20
 

@@ -1,5 +1,7 @@
 use async_graphql::Request;
 use graphnight_core::models::*;
+use graphnight_core::security::SessionPolicy;
+use graphnight_graphql::context::GraphQLContext;
 use graphnight_graphql::{build_schema, schema::QueryInput};
 use graphnight_sql::dialects::get_dialect;
 use graphnight_sql::executor::{ConnectionManager, QueryExecutor};
@@ -81,6 +83,73 @@ async fn test_query_resolver_dry_run() {
 
     let response = schema.execute(Request::new(query)).await;
     assert!(response.is_ok());
+}
+
+#[tokio::test]
+async fn test_query_denied_by_policy() {
+    let (sql_engine, storage, _dir) = setup_test_env().await;
+    let schema = build_schema(sql_engine.clone(), storage.clone());
+    let ctx = GraphQLContext::new(sql_engine, storage)
+        .with_policy(SessionPolicy::new().with_denied_models(vec!["orders".into()]));
+
+    let query = r#"
+        query {
+            query(dryRun: true, input: {
+                name: "orders"
+                measures: [{ formula: "revenue", aggregation: SUM }]
+            }) { sql }
+        }
+    "#;
+
+    let response = schema.execute(Request::new(query).data(ctx)).await;
+    assert!(!response.errors.is_empty());
+    assert!(response.errors[0].message.contains("denied"));
+}
+
+#[tokio::test]
+async fn test_auth_required_rejects_anonymous() {
+    let (sql_engine, storage, _dir) = setup_test_env().await;
+    let schema = build_schema(sql_engine.clone(), storage.clone());
+    let ctx = GraphQLContext::new(sql_engine, storage).with_auth_required(true);
+
+    let query = r#"
+        query {
+            query(dryRun: true, input: {
+                name: "orders"
+                measures: [{ formula: "revenue", aggregation: SUM }]
+            }) { sql }
+        }
+    "#;
+
+    let response = schema.execute(Request::new(query).data(ctx)).await;
+    assert!(!response.errors.is_empty());
+    assert!(response.errors[0]
+        .message
+        .contains("Authentication required"));
+}
+
+#[tokio::test]
+async fn test_admin_required_for_datasource_create() {
+    let (sql_engine, storage, _dir) = setup_test_env().await;
+    let schema = build_schema(sql_engine.clone(), storage.clone());
+    let ctx = GraphQLContext::new(sql_engine, storage)
+        .with_auth_required(true)
+        .with_user("alice".into(), None)
+        .with_admin(false);
+
+    let mutation = r#"
+        mutation {
+            createDatasource(input: {
+                name: "x"
+                driver: "sqlite"
+                connectionString: "sqlite::memory:"
+            }) { name }
+        }
+    "#;
+
+    let response = schema.execute(Request::new(mutation).data(ctx)).await;
+    assert!(!response.errors.is_empty());
+    assert!(response.errors[0].message.contains("Admin"));
 }
 
 #[tokio::test]

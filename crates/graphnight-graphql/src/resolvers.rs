@@ -1,3 +1,6 @@
+use crate::auth::{
+    enforce_policy, reject_if_auth_required, require_admin_if_auth, require_user_if_auth,
+};
 use crate::schema::JsonValue;
 use crate::schema::*;
 use async_graphql::*;
@@ -5,6 +8,7 @@ use graphnight_core::models::{DataSource, Model, Query as CoreQuery};
 use graphnight_sql::SqlEngine;
 use graphnight_storage::StorageBackend;
 use std::sync::Arc;
+use tracing::info;
 
 /// GraphQL Query resolvers
 pub struct QueryRoot {
@@ -26,13 +30,29 @@ impl QueryRoot {
     /// Execute a semantic query
     async fn query(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         input: QueryInput,
         dry_run: Option<bool>,
         _explain: Option<bool>,
     ) -> Result<QueryResponse> {
+        reject_if_auth_required(ctx)?;
         let start = std::time::Instant::now();
-        let query: CoreQuery = input.into();
+        let mut query: CoreQuery = input.into();
+
+        let model_name = query
+            .name
+            .as_ref()
+            .or_else(|| query.source_model.as_ref().map(|s| &s.model))
+            .ok_or_else(|| Error::new("Query must have a name or source_model"))?
+            .clone();
+
+        let model = self
+            .storage
+            .get_model(&model_name, None)
+            .await?
+            .ok_or_else(|| Error::new(format!("Model not found: {}", model_name)))?;
+
+        enforce_policy(ctx, &mut query, &model_name, &model.datasource)?;
 
         if dry_run.unwrap_or(false) {
             let sql = self.sql_engine.generate_sql(&query)?;
@@ -47,45 +67,38 @@ impl QueryRoot {
             });
         }
 
-        // Get the model to determine datasource
-        let model_name = query
-            .name
-            .as_ref()
-            .or_else(|| query.source_model.as_ref().map(|s| &s.model))
-            .ok_or_else(|| Error::new("Query must have a name or source_model"))?;
-
-        let model = self
-            .storage
-            .get_model(model_name, None)
-            .await?
-            .ok_or_else(|| Error::new(format!("Model not found: {}", model_name)))?;
-
         let datasource = self
             .storage
             .get_datasource(&model.datasource)
             .await?
             .ok_or_else(|| Error::new(format!("Datasource not found: {}", model.datasource)))?;
 
-        let results = self
-            .sql_engine
-            .execute_sqlx(&datasource, &self.sql_engine.generate_sql(&query)?)
-            .await?;
+        let sql = self.sql_engine.generate_sql(&query)?;
+        let results = self.sql_engine.execute_sqlx(&datasource, &sql).await?;
 
         let columns = if !results.is_empty() {
             results[0].keys().cloned().collect()
         } else {
             vec![]
         };
+        let row_count = results.len();
 
         let data: Vec<JsonValue> = results
             .into_iter()
             .map(|m| serde_json::to_value(m).unwrap())
             .collect();
 
+        info!(
+            model = %model_name,
+            rows = row_count,
+            duration_ms = start.elapsed().as_millis() as u64,
+            "query executed"
+        );
+
         Ok(QueryResponse {
             data,
             columns,
-            sql: Some(self.sql_engine.generate_sql(&query)?),
+            sql: Some(sql),
             attributes: None,
             population: None,
             population_inferred: false,
@@ -259,7 +272,8 @@ impl MutationRoot {
 #[Object]
 impl MutationRoot {
     /// Create a new model
-    async fn create_model(&self, _ctx: &Context<'_>, input: CreateModelInput) -> Result<ModelInfo> {
+    async fn create_model(&self, ctx: &Context<'_>, input: CreateModelInput) -> Result<ModelInfo> {
+        require_admin_if_auth(ctx)?;
         let model = Model {
             name: input.name.clone(),
             datasource: input.datasource.clone(),
@@ -304,10 +318,11 @@ impl MutationRoot {
     /// Update a model
     async fn update_model(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         name: String,
         input: UpdateModelInput,
     ) -> Result<ModelInfo> {
+        require_admin_if_auth(ctx)?;
         let mut model = self
             .storage
             .get_model(&name, None)
@@ -353,10 +368,11 @@ impl MutationRoot {
     /// Delete a model
     async fn delete_model(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         name: String,
         datasource: Option<String>,
     ) -> Result<bool> {
+        require_admin_if_auth(ctx)?;
         self.storage
             .delete_model(&name, datasource.as_deref())
             .await
@@ -366,9 +382,10 @@ impl MutationRoot {
     /// Create a new datasource
     async fn create_datasource(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         input: CreateDatasourceInput,
     ) -> Result<DatasourceInfo> {
+        require_admin_if_auth(ctx)?;
         let ds = DataSource {
             name: input.name.clone(),
             driver: input.driver,
@@ -392,10 +409,11 @@ impl MutationRoot {
     /// Update a datasource
     async fn update_datasource(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         name: String,
         input: UpdateDatasourceInput,
     ) -> Result<DatasourceInfo> {
+        require_admin_if_auth(ctx)?;
         let mut ds = self
             .storage
             .get_datasource(&name)
@@ -423,7 +441,8 @@ impl MutationRoot {
     }
 
     /// Save a memory
-    async fn save_memory(&self, _ctx: &Context<'_>, input: SaveMemoryInput) -> Result<Memory> {
+    async fn save_memory(&self, ctx: &Context<'_>, input: SaveMemoryInput) -> Result<Memory> {
+        require_user_if_auth(ctx)?;
         let memory = graphnight_storage::Memory {
             id: input.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             learning: input.learning,
@@ -447,7 +466,8 @@ impl MutationRoot {
     }
 
     /// Delete a memory
-    async fn forget_memory(&self, _ctx: &Context<'_>, id: String) -> Result<ForgetMemoryResponse> {
+    async fn forget_memory(&self, ctx: &Context<'_>, id: String) -> Result<ForgetMemoryResponse> {
+        require_user_if_auth(ctx)?;
         let success = self
             .storage
             .delete_memory(&id)
@@ -461,9 +481,10 @@ impl MutationRoot {
     /// Alpha: unsupported. Define models via YAML or `createModel`.
     async fn ingest_models(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         _datasource: String,
     ) -> Result<IngestionReport> {
+        require_admin_if_auth(ctx)?;
         Err(Error::new(
             "ingestModels is not supported in this alpha build; define models via YAML or createModel",
         ))

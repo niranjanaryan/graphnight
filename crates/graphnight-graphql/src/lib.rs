@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod context;
 pub mod directives;
 pub mod resolvers;

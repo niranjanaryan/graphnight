@@ -26,13 +26,17 @@ Declared on a model. The SQL generator uses the join graph walker to emit `JOIN`
 
 JSON or GraphQL input selecting a model (`name` or `sourceModel`), measures, dimensions, filters, limit. **Dry-run** returns SQL only.
 
-## Unsupported in alpha
+## Auth & policy
+
+When `GRAPHNIGHT_API_KEYS` / `GRAPHNIGHT_ADMIN_KEYS` are set, GraphQL requires a Bearer or `X-API-Key`. Queries apply `SessionPolicy` via `PolicyEnforcer` (allow/deny, forced filters, RLS, max rows). `X-Tenant-Id` adds a forced `tenant_id` equality filter.
+
+## Unsupported / incomplete
 
 | Feature | Status |
 |---------|--------|
 | `ingestModels` (DB introspection) | Error — use YAML / `createModel` |
 | `multiStageQuery` DAG | Error — not implemented |
 | Live subscriptions | Stub / empty streams |
-| RLS / forced filters on request path | Library only — not wired |
+| OIDC / SSO | Not yet — API keys only |
 | Result / plan cache | Missing |
 | Python on PyPI | Experimental bindings only |

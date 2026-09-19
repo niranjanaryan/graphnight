@@ -4,14 +4,33 @@
 
 GraphNight is **alpha**. There is no supported production release yet. Security fixes are applied on a best-effort basis on `main`.
 
-## Alpha risk summary
+## Auth (v0.2)
 
-Until the LAUNCH.md production (B1) checklist is complete:
+Configure API keys via environment:
 
-- GraphQL is unauthenticated by default
-- Datasource connection strings can be supplied via API mutations
-- Row-level security / session policies are **not** enforced on the live query path
-- Do not expose a GraphNight server to the public internet or attach production credentials
+```bash
+export GRAPHNIGHT_API_KEYS='alice:secret1,bob:secret2'
+export GRAPHNIGHT_ADMIN_KEYS='admin:adminsecret'
+# optional: force auth even with no keys configured
+# export GRAPHNIGHT_AUTH_REQUIRED=1
+# optional: explicit open mode (silences warning)
+# export GRAPHNIGHT_DEV_OPEN=1
+```
+
+Clients send `Authorization: Bearer <key>` or `X-API-Key: <key>`. Optional `X-Tenant-Id` adds a forced `tenant_id` filter.
+
+When keys are configured (and `GRAPHNIGHT_DEV_OPEN` is not set):
+
+- Anonymous GraphQL operations are rejected
+- Datasource/model write mutations require an **admin** key
+- Queries run through `PolicyEnforcer` (allow/deny lists, forced filters, RLS, max rows)
+
+## Remaining risks
+
+- Default without keys is still **open** (dev convenience) — set keys before any shared deployment
+- Audit log is tracing-only (not durable)
+- No OIDC/SSO yet
+- Do not expose a GraphNight server to the public internet with production warehouse credentials
 
 ## Reporting a vulnerability
 
