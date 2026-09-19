@@ -40,5 +40,66 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # Optional shared metadata DB for HA (`storage.type = "postgres"`).
+  # Start with: docker compose --profile ha up --build
+  metadata-db:
+    profiles: ["ha"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: graphnight
+      POSTGRES_PASSWORD: graphnight
+      POSTGRES_DB: graphnight_meta
+    ports:
+      - "5433:5432"
+    volumes:
+      - metadata-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graphnight -d graphnight_meta"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Server variant using Postgres metadata (profile `ha`).
+  # Example: docker compose --profile ha up --build server-postgres metadata-db
+  server-postgres:
+    profiles: ["ha"]
+    build: .
+    image: graphnight:local
+    ports:
+      - "8081:8080"
+    depends_on:
+      metadata-db:
+        condition: service_healthy
+    environment:
+      GRAPHNIGHT_API_KEYS: ${GRAPHNIGHT_API_KEYS:-}
+      GRAPHNIGHT_ADMIN_KEYS: ${GRAPHNIGHT_ADMIN_KEYS:-}
+      GRAPHNIGHT_AUTH_REQUIRED: ${GRAPHNIGHT_AUTH_REQUIRED:-}
+      GRAPHNIGHT_DEV_OPEN: ${GRAPHNIGHT_DEV_OPEN:-1}
+      GRAPHNIGHT_METADATA_DATABASE_URL: postgresql://graphnight:graphnight@metadata-db:5432/graphnight_meta
+    volumes:
+      - ./examples/graphnight.postgres.toml:/app/examples/graphnight.postgres.toml:ro
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --config
+      - /app/examples/graphnight.postgres.toml
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:8080/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
 volumes:
   graphnight-data:
+  metadata-db-data:

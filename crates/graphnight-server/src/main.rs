@@ -22,7 +22,7 @@ use graphnight_sql::{
     executor::{ConnectionManager, PoolCounts, QueryExecutor},
     SqlEngine,
 };
-use graphnight_storage::{StorageBackend, YamlStorage};
+use graphnight_storage::{PostgresMetadataStorage, StorageBackend, YamlStorage};
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn, Level};
@@ -144,7 +144,17 @@ async fn main() -> anyhow::Result<()> {
                 storage
             }
             "sqlite" => Arc::new(graphnight_storage::SqliteStorage::new(storage_path).await?),
-            _ => {
+            "postgres" => {
+                // path / --storage-path may be a URL or env:VAR; else GRAPHNIGHT_METADATA_DATABASE_URL
+                let path_override = args
+                    .storage_path
+                    .as_deref()
+                    .or(config.storage.path.as_deref());
+                let url = PostgresMetadataStorage::resolve_url(path_override)?;
+                Arc::new(PostgresMetadataStorage::new(&url).await?)
+            }
+            other => {
+                warn!("Unknown storage.type '{}'; falling back to yaml", other);
                 let storage = Arc::new(YamlStorage::new(storage_path)?);
                 storage.load().await?;
                 storage

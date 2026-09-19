@@ -1,8 +1,128 @@
 use graphnight_core::models::{DataSource, Model};
-use graphnight_storage::{Memory, MemoryFilter, StorageBackend, YamlStorage};
+use graphnight_storage::{
+    Memory, MemoryFilter, PostgresMetadataStorage, StorageBackend, YamlStorage,
+    METADATA_DATABASE_URL_ENV,
+};
 use pretty_assertions::assert_eq;
 use std::sync::Arc;
 use tempfile::tempdir;
+
+/// Compile-time smoke: Postgres backend implements `StorageBackend`.
+#[test]
+fn postgres_metadata_storage_implements_trait() {
+    fn assert_backend<T: StorageBackend>() {}
+    assert_backend::<PostgresMetadataStorage>();
+}
+
+#[test]
+fn postgres_resolve_url_path_env_and_fallback() {
+    // Sequential: process env is shared across parallel tests.
+    std::env::set_var(
+        "GRAPHNIGHT_TEST_META_URL",
+        "postgresql://localhost/graphnight_meta",
+    );
+    let url = PostgresMetadataStorage::resolve_url(Some("env:GRAPHNIGHT_TEST_META_URL")).unwrap();
+    assert_eq!(url, "postgresql://localhost/graphnight_meta");
+    std::env::remove_var("GRAPHNIGHT_TEST_META_URL");
+
+    let direct =
+        PostgresMetadataStorage::resolve_url(Some("postgresql://user:pass@db:5432/meta")).unwrap();
+    assert_eq!(direct, "postgresql://user:pass@db:5432/meta");
+
+    std::env::set_var(
+        METADATA_DATABASE_URL_ENV,
+        "postgresql://user:pass@db:5432/meta",
+    );
+    let from_env = PostgresMetadataStorage::resolve_url(None).unwrap();
+    assert_eq!(from_env, "postgresql://user:pass@db:5432/meta");
+    std::env::remove_var(METADATA_DATABASE_URL_ENV);
+
+    let err = PostgresMetadataStorage::resolve_url(None).unwrap_err();
+    assert!(err.to_string().contains(METADATA_DATABASE_URL_ENV));
+}
+
+/// Integration smoke against a live Postgres.
+///
+/// Run with Docker compose profile `ha` or any Postgres, then:
+/// `GRAPHNIGHT_METADATA_DATABASE_URL=postgresql://graphnight:graphnight@127.0.0.1:5433/graphnight_meta \
+///    cargo test -p graphnight-storage postgres_metadata_storage_crud -- --ignored --nocapture`
+///
+/// Search is ILIKE-only (not Tantivy). Prefer testcontainers later when CI has Docker-in-Docker.
+#[tokio::test]
+#[ignore = "requires Postgres; set GRAPHNIGHT_METADATA_DATABASE_URL or start docker compose --profile ha"]
+async fn postgres_metadata_storage_crud() {
+    let url = PostgresMetadataStorage::resolve_url(None).unwrap_or_else(|_| {
+        "postgresql://graphnight:graphnight@127.0.0.1:5433/graphnight_meta".to_string()
+    });
+    let storage = Arc::new(
+        PostgresMetadataStorage::new(&url)
+            .await
+            .expect("connect postgres"),
+    );
+
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let model_name = format!("orders_{suffix}");
+    let ds_name = format!("ds_{suffix}");
+
+    let ds = DataSource {
+        name: ds_name.clone(),
+        driver: "postgres".to_string(),
+        connection_string: "postgresql://localhost/db".to_string(),
+        description: Some("test".to_string()),
+        models: vec![],
+        pool_size: Some(2),
+        meta: Default::default(),
+    };
+    storage.create_datasource(ds.clone()).await.unwrap();
+    assert!(storage.get_datasource(&ds_name).await.unwrap().is_some());
+
+    let model = Model {
+        name: model_name.clone(),
+        datasource: ds_name.clone(),
+        description: Some("Order facts".to_string()),
+        measures: vec![],
+        dimensions: vec![],
+        time_dimensions: vec![],
+        joins: vec![],
+        sql: None,
+        meta: Default::default(),
+    };
+    storage.create_model(model.clone()).await.unwrap();
+    let got = storage
+        .get_model(&model_name, Some(&ds_name))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(got.description, Some("Order facts".to_string()));
+
+    let results = storage.search(&model_name, 5).await.unwrap();
+    assert_eq!(results.len(), 1);
+
+    let mem_id = format!("mem_{suffix}");
+    storage
+        .save_memory(Memory {
+            id: mem_id.clone(),
+            learning: "spike".to_string(),
+            linked_entities: vec!["revenue".to_string()],
+            description: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            meta: Default::default(),
+        })
+        .await
+        .unwrap();
+    assert!(storage.get_memory(&mem_id).await.unwrap().is_some());
+
+    assert!(storage.delete_memory(&mem_id).await.unwrap());
+    assert!(storage
+        .delete_model(&model_name, Some(&ds_name))
+        .await
+        .unwrap());
+    assert!(storage.delete_datasource(&ds_name).await.unwrap());
+}
 
 #[tokio::test]
 async fn test_yaml_storage_models() {

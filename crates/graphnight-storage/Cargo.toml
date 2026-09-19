@@ -14,7 +14,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
-sqlx = { workspace = true, features = ["sqlite"] }
+sqlx = { workspace = true, features = ["sqlite", "postgres", "json"] }
 tantivy = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }

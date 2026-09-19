@@ -94,7 +94,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 - [x] Streaming fetch in executor (GraphQL still buffers each response payload)
 - [ ] Multi-stage DAG with topological sort (not sequential stub)
 - [x] Criterion bench baseline (`graphnight-sql`)
-- [ ] HA story for metadata (shared store, not single-node YAML only)
+- [x] HA story for metadata (Postgres `PostgresMetadataStorage` / `storage.type = "postgres"`; compose profile `ha`)
 - [x] Prometheus `/metrics` counters (queries, cache hits/misses, rows)
 
 ### B4. Product surface (production-expected)

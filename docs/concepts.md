@@ -2,7 +2,7 @@
 
 ## Model
 
-A semantic table (or SQL view) with measures, dimensions, time dimensions, and optional joins. Stored in YAML (`models.yaml`) or via GraphQL `createModel`.
+A semantic table (or SQL view) with measures, dimensions, time dimensions, and optional joins. Stored in YAML (`models.yaml`), SQLite, or shared Postgres metadata (`storage.type = "postgres"`), or via GraphQL `createModel`.
 
 ## Measure
 

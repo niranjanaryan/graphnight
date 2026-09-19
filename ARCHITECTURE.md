@@ -72,7 +72,7 @@ Cargo.toml
 crates/
   graphnight-core/       # models, formula, join, security types
   graphnight-sql/        # dialects, generator, executor
-  graphnight-storage/    # yaml, sqlite, tantivy
+  graphnight-storage/    # yaml, sqlite, postgres, tantivy
   graphnight-graphql/    # schema, resolvers, directives
   graphnight-server/     # GraphQL server binary (Axum)
   graphnight-cli/        # CLI (init, query, model, …)

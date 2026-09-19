@@ -5,6 +5,10 @@ port = 8080
 [storage]
 type = "yaml"
 path = "./examples/data"
+# HA metadata (shared across replicas): type = "postgres"
+# path = "env:GRAPHNIGHT_METADATA_DATABASE_URL"
+# or path = "postgresql://graphnight:graphnight@127.0.0.1:5433/graphnight_meta"
+# See examples/graphnight.postgres.toml and docker compose --profile ha
 
 # Example datasource — replace with your own credentials.
 # Prefer secret refs: connection_string = "env:GRAPHNIGHT_DATASOURCE_DEMO"

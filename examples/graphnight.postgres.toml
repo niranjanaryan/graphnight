@@ -1,0 +1,18 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+
+# Shared Postgres metadata for multi-replica / HA deployments.
+# Connection: storage.path, --storage-path, or GRAPHNIGHT_METADATA_DATABASE_URL.
+# Prefer secret refs: path = "env:GRAPHNIGHT_METADATA_DATABASE_URL"
+[storage]
+type = "postgres"
+path = "env:GRAPHNIGHT_METADATA_DATABASE_URL"
+
+# Example warehouse datasource (separate from metadata DB).
+# Prefer secret refs for credentials.
+[datasources.demo]
+driver = "sqlite"
+connection_string = "sqlite:./examples/data/demo.db"
+description = "Local demo SQLite database"
+pool_size = 1

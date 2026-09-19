@@ -53,6 +53,24 @@ You should see dialect SQL with `SUM` / `COUNT` / `GROUP BY` (and joins when mod
 
 Then `POST http://127.0.0.1:8080/graphql` with `dryRun: true` (see `examples/query.graphql`).
 
+### Shared Postgres metadata (HA)
+
+Default storage is YAML on disk. For multi-replica servers, point metadata at Postgres:
+
+```toml
+[storage]
+type = "postgres"
+path = "env:GRAPHNIGHT_METADATA_DATABASE_URL"
+```
+
+```bash
+export GRAPHNIGHT_METADATA_DATABASE_URL='postgresql://graphnight:graphnight@127.0.0.1:5433/graphnight_meta'
+docker compose --profile ha up -d metadata-db
+cargo run -p graphnight-server -- --config examples/graphnight.postgres.toml --host 127.0.0.1
+```
+
+Tables are created automatically. Model search on this backend uses SQL `ILIKE` (not Tantivy).
+
 ## Security
 
 Alpha servers have **no authentication**. Do not bind to a public interface or attach production credentials. Row-level security types exist in-library but are **not enforced** on the live path yet.

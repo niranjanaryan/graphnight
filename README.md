@@ -12,7 +12,7 @@ This repository is an early public preview. Core query planning and SQL generati
 - Formula helpers (`sum`, `avg`, `count`, `time_shift`, `ratio`, …)
 - SQL generation for Postgres / MySQL / SQLite / DuckDB
 - GraphQL API on **Axum** + CLI (`graphnight init`, query dry-run, model list)
-- YAML / SQLite metadata storage and Tantivy search
+- YAML / SQLite / **Postgres** metadata storage (HA shared store) and Tantivy search (Postgres search is ILIKE-only)
 - Session policy / RLS types in-library (**not yet enforced on the live request path**)
 
 ## Quick start
@@ -75,6 +75,26 @@ docker compose up --build
 
 Data persists in the `graphnight-data` volume (`/data` in the container). Image includes `graphnight-server` and the `graphnight` CLI.
 
+HA metadata (optional Postgres):
+
+```bash
+docker compose --profile ha up --build metadata-db server-postgres
+# metadata on :5433, server on :8081
+# GRAPHNIGHT_METADATA_DATABASE_URL=postgresql://graphnight:graphnight@127.0.0.1:5433/graphnight_meta
+```
+
+### Postgres metadata storage
+
+For multi-replica deployments, set shared metadata in `graphnight.toml`:
+
+```toml
+[storage]
+type = "postgres"
+path = "env:GRAPHNIGHT_METADATA_DATABASE_URL"
+```
+
+Or omit `path` and export `GRAPHNIGHT_METADATA_DATABASE_URL` directly. `path` / `--storage-path` may also be a raw `postgresql://…` URL. Schema tables are created on connect (`CREATE TABLE IF NOT EXISTS`). Model search on this backend is basic `ILIKE` (not Tantivy). See `examples/graphnight.postgres.toml`.
+
 ```bash
 curl http://127.0.0.1:8080/graphql \
   -H 'content-type: application/json' \
@@ -100,7 +120,7 @@ Cargo.toml                 # workspace root
 crates/
   graphnight-core/         # models, formulas, joins, security types
   graphnight-sql/          # SQL generator + sqlx executor
-  graphnight-storage/      # YAML / SQLite / Tantivy
+  graphnight-storage/      # YAML / SQLite / Postgres / Tantivy
   graphnight-graphql/      # async-graphql schema
   graphnight-server/       # Axum GraphQL server binary
   graphnight-cli/          # CLI binary
@@ -165,4 +185,4 @@ Tracked in [LAUNCH.md](LAUNCH.md):
 3. **v0.2** — API-key auth + `PolicyEnforcer` on the live path — done on `main`
 4. **v0.3-beta** — plan/result cache, streaming executor, `/metrics`, Criterion benches — shipped
 5. **Production closeout (in progress on `main`)** — Docker, deep `/health`, durable audit, SQLite e2e, CORS + `env:` secret refs
-6. **Still open for v1.0** — OIDC/SSO, vault, Postgres testcontainers, HA metadata
+6. **Still open for v1.0** — OIDC/SSO, vault, Postgres warehouse testcontainers (metadata Postgres backend shipped; CRUD test `#[ignore]`d without Docker)
