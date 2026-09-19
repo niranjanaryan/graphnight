@@ -37,6 +37,10 @@ impl SqlGenerator {
         self.model_registry.insert(model.name.clone(), model);
     }
 
+    pub fn dialect_name(&self) -> &str {
+        self.dialect.name()
+    }
+
     /// Generate SQL for a query
     pub fn generate(&self, query: &Query) -> Result<String> {
         let plan = self.build_logical_plan(query)?;

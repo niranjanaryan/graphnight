@@ -1,17 +1,26 @@
 use anyhow::{anyhow, Result};
+use async_stream::try_stream;
+use futures::Stream;
+use futures::StreamExt;
 use graphnight_core::models::DataSource;
 use serde_json::Value;
-use sqlx::{MySql, Pool, Postgres, Row, Sqlite};
+use sqlx::{Column, MySql, Pool, Postgres, Row, Sqlite};
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
+
+/// Default statement timeout applied on Postgres/MySQL connections when possible.
+const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Connection pool manager for multiple datasources
 pub struct ConnectionManager {
     pg_pools: Arc<RwLock<HashMap<String, Pool<Postgres>>>>,
     mysql_pools: Arc<RwLock<HashMap<String, Pool<MySql>>>>,
     sqlite_pools: Arc<RwLock<HashMap<String, Pool<Sqlite>>>>,
+    statement_timeout: Duration,
 }
 
 impl ConnectionManager {
@@ -20,7 +29,13 @@ impl ConnectionManager {
             pg_pools: Arc::new(RwLock::new(HashMap::new())),
             mysql_pools: Arc::new(RwLock::new(HashMap::new())),
             sqlite_pools: Arc::new(RwLock::new(HashMap::new())),
+            statement_timeout: DEFAULT_STATEMENT_TIMEOUT,
         }
+    }
+
+    pub fn with_statement_timeout(mut self, timeout: Duration) -> Self {
+        self.statement_timeout = timeout;
+        self
     }
 
     /// Get or create a PostgreSQL pool
@@ -30,14 +45,15 @@ impl ConnectionManager {
             return Ok(pool.clone());
         }
 
-        let pool_size = ds.pool_size.unwrap_or(10) as u32;
+        let pool_size = ds.pool_size.unwrap_or(10);
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(pool_size)
-            .acquire_timeout(std::time::Duration::from_secs(30))
-            .idle_timeout(std::time::Duration::from_secs(600))
+            .acquire_timeout(Duration::from_secs(30))
+            .idle_timeout(Duration::from_secs(600))
             .connect(&ds.connection_string)
             .await?;
 
+        // Apply statement timeout for this session defaults via SET on first use in execute.
         pools.insert(ds.name.clone(), pool.clone());
         info!("Created PostgreSQL pool for datasource: {}", ds.name);
         Ok(pool)
@@ -50,11 +66,11 @@ impl ConnectionManager {
             return Ok(pool.clone());
         }
 
-        let pool_size = ds.pool_size.unwrap_or(10) as u32;
+        let pool_size = ds.pool_size.unwrap_or(10);
         let pool = sqlx::mysql::MySqlPoolOptions::new()
             .max_connections(pool_size)
-            .acquire_timeout(std::time::Duration::from_secs(30))
-            .idle_timeout(std::time::Duration::from_secs(600))
+            .acquire_timeout(Duration::from_secs(30))
+            .idle_timeout(Duration::from_secs(600))
             .connect(&ds.connection_string)
             .await?;
 
@@ -72,13 +88,17 @@ impl ConnectionManager {
 
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(1)
-            .acquire_timeout(std::time::Duration::from_secs(30))
+            .acquire_timeout(Duration::from_secs(30))
             .connect(&ds.connection_string)
             .await?;
 
         pools.insert(ds.name.clone(), pool.clone());
         info!("Created SQLite pool for datasource: {}", ds.name);
         Ok(pool)
+    }
+
+    pub fn statement_timeout(&self) -> Duration {
+        self.statement_timeout
     }
 
     /// Close all pools
@@ -88,6 +108,12 @@ impl ConnectionManager {
             pool.close().await;
             info!("Closed PostgreSQL pool: {}", name);
         }
+    }
+}
+
+impl Default for ConnectionManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -101,215 +127,205 @@ impl QueryExecutor {
         Self { connection_manager }
     }
 
-    /// Execute a query and return results as JSON
+    /// Execute a query and return results as JSON (buffered).
     pub async fn execute(&self, ds: &DataSource, sql: &str) -> Result<Vec<HashMap<String, Value>>> {
-        debug!("Executing SQL on {}: {}", ds.name, sql);
-
-        match ds.driver.as_str() {
-            "postgres" | "postgresql" | "pg" => {
-                let pool = self.connection_manager.get_pg_pool(ds).await?;
-                self.execute_pg(&pool, sql).await
-            }
-            "mysql" | "mariadb" => {
-                let pool = self.connection_manager.get_mysql_pool(ds).await?;
-                self.execute_mysql(&pool, sql).await
-            }
-            "sqlite" | "sqlite3" => {
-                let pool = self.connection_manager.get_sqlite_pool(ds).await?;
-                self.execute_sqlite(&pool, sql).await
-            }
-            _ => Err(anyhow!("Unsupported driver: {}", ds.driver)),
-        }
+        self.execute_streaming_collect(ds, sql).await
     }
 
-    /// Execute and stream results (for large result sets)
-    pub async fn execute_stream(
+    /// Fetch rows via streaming API and collect into a Vec (avoids fetch_all bulk path).
+    pub async fn execute_streaming_collect(
         &self,
         ds: &DataSource,
         sql: &str,
     ) -> Result<Vec<HashMap<String, Value>>> {
-        // For now, fall back to executing and collecting all results
-        // Proper streaming would require more complex lifetime management
-        self.execute(ds, sql).await
+        let mut rows = Vec::new();
+        let mut stream = self.execute_stream(ds, sql.to_string());
+        while let Some(item) = stream.next().await {
+            rows.push(item?);
+        }
+        Ok(rows)
     }
 
-    // Streaming disabled for now - would need async stream with proper lifetimes
-    // fn stream_pg(&self, pool: Pool<Postgres>, sql: String) -> Box<dyn Stream<Item = Result<HashMap<String, Value>>> + Send + Unpin + 'static> {
-    //     let stream = sqlx::query(&sql).fetch(pool);
-    //     Box::new(stream.map(move |row_result| {
-    //         match row_result {
-    //             Ok(row) => {
-    //                 let mut map = HashMap::new();
-    //                 for i in 0..row.len() {
-    //                     if let Ok(name) = row.try_get::<String, _>(i) {
-    //                         let value = self.pg_value_to_json(&row, &name)?;
-    //                         map.insert(name, value);
-    //                     }
-    //                 }
-    //                 Ok(map)
-    //             }
-    //             Err(e) => Err(anyhow!(e)),
-    //         }
-    //     }))
-    // }
+    /// Stream result rows one at a time.
+    pub fn execute_stream<'a>(
+        &'a self,
+        ds: &'a DataSource,
+        sql: String,
+    ) -> Pin<Box<dyn Stream<Item = Result<HashMap<String, Value>>> + Send + 'a>> {
+        let driver = ds.driver.clone();
+        let ds_name = ds.name.clone();
+        let timeout = self.connection_manager.statement_timeout();
+        let cm = self.connection_manager.clone();
 
-    async fn execute_pg(
-        &self,
-        pool: &Pool<Postgres>,
-        sql: &str,
-    ) -> Result<Vec<HashMap<String, Value>>> {
-        let rows = sqlx::query(sql).fetch_all(pool).await?;
-        let mut results = Vec::new();
-
-        for row in rows {
-            let mut map = HashMap::new();
-            for i in 0..row.len() {
-                if let Ok(name) = row.try_get::<String, _>(i) {
-                    let value = self.pg_value_to_json(&row, &name)?;
-                    map.insert(name, value);
+        Box::pin(try_stream! {
+            debug!("Streaming SQL on {}: {}", ds_name, sql);
+            match driver.as_str() {
+                "postgres" | "postgresql" | "pg" => {
+                    let pool = cm.get_pg_pool(ds).await?;
+                    let mut conn = pool.acquire().await?;
+                    let ms = timeout.as_millis();
+                    sqlx::query(&format!("SET statement_timeout = {ms}"))
+                        .execute(&mut *conn)
+                        .await
+                        .ok();
+                    let mut rows = sqlx::query(&sql).fetch(&mut *conn);
+                    while let Some(row) = rows.next().await {
+                        let row = row?;
+                        yield pg_row_to_map(&row)?;
+                    }
+                }
+                "mysql" | "mariadb" => {
+                    let pool = cm.get_mysql_pool(ds).await?;
+                    let mut conn = pool.acquire().await?;
+                    let ms = timeout.as_millis();
+                    sqlx::query(&format!("SET SESSION max_execution_time = {ms}"))
+                        .execute(&mut *conn)
+                        .await
+                        .ok();
+                    let mut rows = sqlx::query(&sql).fetch(&mut *conn);
+                    while let Some(row) = rows.next().await {
+                        let row = row?;
+                        yield mysql_row_to_map(&row)?;
+                    }
+                }
+                "sqlite" | "sqlite3" => {
+                    let pool = cm.get_sqlite_pool(ds).await?;
+                    let mut rows = sqlx::query(&sql).fetch(&pool);
+                    while let Some(row) = rows.next().await {
+                        let row = row?;
+                        yield sqlite_row_to_map(&row)?;
+                    }
+                }
+                other => {
+                    Err(anyhow!("Unsupported driver: {other}"))?;
                 }
             }
-            results.push(map);
-        }
-
-        Ok(results)
+        })
     }
+}
 
-    async fn execute_mysql(
-        &self,
-        pool: &Pool<MySql>,
-        sql: &str,
-    ) -> Result<Vec<HashMap<String, Value>>> {
-        let rows = sqlx::query(sql).fetch_all(pool).await?;
-        let mut results = Vec::new();
-
-        for row in rows {
-            let mut map = HashMap::new();
-            for i in 0..row.len() {
-                if let Ok(name) = row.try_get::<String, _>(i) {
-                    let value = self.mysql_value_to_json(&row, &name)?;
-                    map.insert(name, value);
-                }
-            }
-            results.push(map);
-        }
-
-        Ok(results)
+fn pg_row_to_map(row: &sqlx::postgres::PgRow) -> Result<HashMap<String, Value>> {
+    let mut map = HashMap::new();
+    for col in row.columns() {
+        let name = col.name().to_string();
+        map.insert(name.clone(), pg_value_to_json(row, &name)?);
     }
+    Ok(map)
+}
 
-    async fn execute_sqlite(
-        &self,
-        pool: &Pool<Sqlite>,
-        sql: &str,
-    ) -> Result<Vec<HashMap<String, Value>>> {
-        let rows = sqlx::query(sql).fetch_all(pool).await?;
-        let mut results = Vec::new();
-
-        for row in rows {
-            let mut map = HashMap::new();
-            for i in 0..row.len() {
-                if let Ok(name) = row.try_get::<String, _>(i) {
-                    let value = self.sqlite_value_to_json(&row, &name)?;
-                    map.insert(name, value);
-                }
-            }
-            results.push(map);
-        }
-
-        Ok(results)
+fn mysql_row_to_map(row: &sqlx::mysql::MySqlRow) -> Result<HashMap<String, Value>> {
+    let mut map = HashMap::new();
+    for col in row.columns() {
+        let name = col.name().to_string();
+        map.insert(name.clone(), mysql_value_to_json(row, &name)?);
     }
+    Ok(map)
+}
 
-    // Streaming disabled for now - would need async stream with proper lifetimes
-    // fn stream_pg(&self, pool: Pool<Postgres>, sql: String) -> Box<dyn Stream<Item = Result<HashMap<String, Value>>> + Send + Unpin + 'static> {
-    //     let stream = sqlx::query(&sql).fetch(pool);
-    //     Box::new(stream.map(move |row_result| {
-    //         match row_result {
-    //             Ok(row) => {
-    //                 let mut map = HashMap::new();
-    //                 for i in 0..row.len() {
-    //                     if let Ok(name) = row.try_get::<String, _>(i) {
-    //                         let value = self.pg_value_to_json(&row, &name)?;
-    //                         map.insert(name, value);
-    //                     }
-    //                 }
-    //                 Ok(map)
-    //             }
-    //             Err(e) => Err(anyhow!(e)),
-    //         }
-    //     }))
-    // }
-
-    fn pg_value_to_json(&self, row: &sqlx::postgres::PgRow, name: &str) -> Result<Value> {
-        use sqlx::Row;
-        if let Ok(v) = row.try_get::<Option<String>, _>(name) {
-            return Ok(Value::String(v.unwrap_or_default()));
-        }
-        if let Ok(v) = row.try_get::<Option<i64>, _>(name) {
-            return Ok(Value::Number(serde_json::Number::from(v.unwrap_or(0))));
-        }
-        if let Ok(v) = row.try_get::<Option<f64>, _>(name) {
-            if let Some(num) = v {
-                return Ok(serde_json::Number::from_f64(num)
-                    .map(Value::Number)
-                    .unwrap_or(Value::Null));
-            }
-            return Ok(Value::Null);
-        }
-        if let Ok(v) = row.try_get::<Option<bool>, _>(name) {
-            return Ok(Value::Bool(v.unwrap_or(false)));
-        }
-        if let Ok(v) = row.try_get::<Option<serde_json::Value>, _>(name) {
-            return Ok(v.unwrap_or(Value::Null));
-        }
-        if let Ok(v) = row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(name) {
-            return Ok(Value::String(
-                v.map(|dt| dt.to_rfc3339()).unwrap_or_default(),
-            ));
-        }
-        Ok(Value::Null)
+fn sqlite_row_to_map(row: &sqlx::sqlite::SqliteRow) -> Result<HashMap<String, Value>> {
+    let mut map = HashMap::new();
+    for col in row.columns() {
+        let name = col.name().to_string();
+        map.insert(name.clone(), sqlite_value_to_json(row, &name)?);
     }
+    Ok(map)
+}
 
-    fn mysql_value_to_json(&self, row: &sqlx::mysql::MySqlRow, name: &str) -> Result<Value> {
-        use sqlx::Row;
-        if let Ok(v) = row.try_get::<Option<String>, _>(name) {
-            return Ok(Value::String(v.unwrap_or_default()));
-        }
-        if let Ok(v) = row.try_get::<Option<i64>, _>(name) {
-            return Ok(Value::Number(serde_json::Number::from(v.unwrap_or(0))));
-        }
-        if let Ok(v) = row.try_get::<Option<f64>, _>(name) {
-            if let Some(num) = v {
-                return Ok(serde_json::Number::from_f64(num)
-                    .map(Value::Number)
-                    .unwrap_or(Value::Null));
-            }
-            return Ok(Value::Null);
-        }
-        if let Ok(v) = row.try_get::<Option<bool>, _>(name) {
-            return Ok(Value::Bool(v.unwrap_or(false)));
-        }
-        Ok(Value::Null)
+fn pg_value_to_json(row: &sqlx::postgres::PgRow, name: &str) -> Result<Value> {
+    if let Ok(v) = row.try_get::<Option<String>, _>(name) {
+        return Ok(match v {
+            Some(s) => Value::String(s),
+            None => Value::Null,
+        });
     }
+    if let Ok(v) = row.try_get::<Option<i64>, _>(name) {
+        return Ok(match v {
+            Some(n) => Value::Number(n.into()),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<f64>, _>(name) {
+        return Ok(match v {
+            Some(num) => serde_json::Number::from_f64(num)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<bool>, _>(name) {
+        return Ok(match v {
+            Some(b) => Value::Bool(b),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<serde_json::Value>, _>(name) {
+        return Ok(v.unwrap_or(Value::Null));
+    }
+    if let Ok(v) = row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(name) {
+        return Ok(match v {
+            Some(dt) => Value::String(dt.to_rfc3339()),
+            None => Value::Null,
+        });
+    }
+    Ok(Value::Null)
+}
 
-    fn sqlite_value_to_json(&self, row: &sqlx::sqlite::SqliteRow, name: &str) -> Result<Value> {
-        use sqlx::Row;
-        if let Ok(v) = row.try_get::<Option<String>, _>(name) {
-            return Ok(Value::String(v.unwrap_or_default()));
-        }
-        if let Ok(v) = row.try_get::<Option<i64>, _>(name) {
-            return Ok(Value::Number(serde_json::Number::from(v.unwrap_or(0))));
-        }
-        if let Ok(v) = row.try_get::<Option<f64>, _>(name) {
-            if let Some(num) = v {
-                return Ok(serde_json::Number::from_f64(num)
-                    .map(Value::Number)
-                    .unwrap_or(Value::Null));
-            }
-            return Ok(Value::Null);
-        }
-        if let Ok(v) = row.try_get::<Option<bool>, _>(name) {
-            return Ok(Value::Bool(v.unwrap_or(false)));
-        }
-        Ok(Value::Null)
+fn mysql_value_to_json(row: &sqlx::mysql::MySqlRow, name: &str) -> Result<Value> {
+    if let Ok(v) = row.try_get::<Option<String>, _>(name) {
+        return Ok(match v {
+            Some(s) => Value::String(s),
+            None => Value::Null,
+        });
     }
+    if let Ok(v) = row.try_get::<Option<i64>, _>(name) {
+        return Ok(match v {
+            Some(n) => Value::Number(n.into()),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<f64>, _>(name) {
+        return Ok(match v {
+            Some(num) => serde_json::Number::from_f64(num)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<bool>, _>(name) {
+        return Ok(match v {
+            Some(b) => Value::Bool(b),
+            None => Value::Null,
+        });
+    }
+    Ok(Value::Null)
+}
+
+fn sqlite_value_to_json(row: &sqlx::sqlite::SqliteRow, name: &str) -> Result<Value> {
+    if let Ok(v) = row.try_get::<Option<String>, _>(name) {
+        return Ok(match v {
+            Some(s) => Value::String(s),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<i64>, _>(name) {
+        return Ok(match v {
+            Some(n) => Value::Number(n.into()),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<f64>, _>(name) {
+        return Ok(match v {
+            Some(num) => serde_json::Number::from_f64(num)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            None => Value::Null,
+        });
+    }
+    if let Ok(v) = row.try_get::<Option<bool>, _>(name) {
+        return Ok(match v {
+            Some(b) => Value::Bool(b),
+            None => Value::Null,
+        });
+    }
+    Ok(Value::Null)
 }

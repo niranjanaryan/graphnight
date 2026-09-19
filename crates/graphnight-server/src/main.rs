@@ -1,13 +1,13 @@
 mod auth_config;
 
 use async_graphql::http::GraphiQLSource;
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use auth_config::{extract_api_key, extract_tenant, AuthConfig};
 use axum::{
     extract::State,
     http::HeaderMap,
     response::{Html, IntoResponse},
-    routing::get,
+    routing::{get, get_service},
     Router,
 };
 use clap::Parser;
@@ -180,8 +180,14 @@ async fn main() -> anyhow::Result<()> {
         auth,
     };
 
+    let schema_for_ws = state.schema.clone();
+
     let app = Router::new()
         .route("/graphql", get(graphiql).post(graphql_handler))
+        .route(
+            "/graphql/ws",
+            get_service(GraphQLSubscription::new(schema_for_ws)),
+        )
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .layer(TraceLayer::new_for_http())
@@ -192,6 +198,7 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     info!("Server listening on http://{addr}");
     info!("GraphiQL: http://{addr}/graphql");
+    info!("GraphQL WS: ws://{addr}/graphql/ws");
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -229,8 +236,8 @@ async fn health() -> &'static str {
     "OK"
 }
 
-async fn metrics() -> &'static str {
-    "# GraphNight metrics placeholder\n# Prometheus exposition planned for v0.3\n"
+async fn metrics(State(state): State<AppState>) -> String {
+    state.sql_engine.metrics().render_prometheus()
 }
 
 async fn load_config(path: &str) -> anyhow::Result<Config> {

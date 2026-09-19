@@ -260,12 +260,16 @@ impl QueryRoot {
 
 /// GraphQL Mutation resolvers
 pub struct MutationRoot {
+    sql_engine: Arc<SqlEngine>,
     storage: Arc<dyn StorageBackend>,
 }
 
 impl MutationRoot {
-    pub fn new(_sql_engine: Arc<SqlEngine>, storage: Arc<dyn StorageBackend>) -> Self {
-        Self { storage }
+    pub fn new(sql_engine: Arc<SqlEngine>, storage: Arc<dyn StorageBackend>) -> Self {
+        Self {
+            sql_engine,
+            storage,
+        }
     }
 }
 
@@ -296,6 +300,7 @@ impl MutationRoot {
         };
 
         let created = self.storage.create_model(model).await?;
+        self.sql_engine.invalidate_result_cache();
 
         Ok(ModelInfo {
             name: created.name,
@@ -346,6 +351,7 @@ impl MutationRoot {
         }
 
         let updated = self.storage.update_model(&name, model).await?;
+        self.sql_engine.invalidate_result_cache();
 
         Ok(ModelInfo {
             name: updated.name,
@@ -373,10 +379,13 @@ impl MutationRoot {
         datasource: Option<String>,
     ) -> Result<bool> {
         require_admin_if_auth(ctx)?;
-        self.storage
+        let deleted = self
+            .storage
             .delete_model(&name, datasource.as_deref())
             .await
-            .map_err(|e| Error::new(e.to_string()))
+            .map_err(|e| Error::new(e.to_string()))?;
+        self.sql_engine.invalidate_result_cache();
+        Ok(deleted)
     }
 
     /// Create a new datasource
@@ -492,28 +501,118 @@ impl MutationRoot {
 }
 
 /// GraphQL Subscription resolvers
-pub struct SubscriptionRoot;
+pub struct SubscriptionRoot {
+    sql_engine: Arc<SqlEngine>,
+    storage: Arc<dyn StorageBackend>,
+}
+
+impl SubscriptionRoot {
+    pub fn new(sql_engine: Arc<SqlEngine>, storage: Arc<dyn StorageBackend>) -> Self {
+        Self {
+            sql_engine,
+            storage,
+        }
+    }
+}
 
 #[Subscription]
 impl SubscriptionRoot {
-    /// Subscribe to live query results
+    /// Poll a semantic query on an interval (WebSocket). GraphQL still buffers
+    /// each tick's payload; the SQL layer streams rows into that buffer.
     async fn live_query(
         &self,
         _ctx: &Context<'_>,
-        _input: QueryInput,
-        _interval_ms: i32,
+        input: QueryInput,
+        interval_ms: i32,
     ) -> impl futures::Stream<Item = QueryResponse> {
-        // Would implement polling query execution
-        futures::stream::empty()
+        let sql_engine = self.sql_engine.clone();
+        let storage = self.storage.clone();
+        let interval = std::time::Duration::from_millis(interval_ms.max(250) as u64);
+
+        async_stream::stream! {
+            let mut ticker = tokio::time::interval(interval);
+            loop {
+                ticker.tick().await;
+                let start = std::time::Instant::now();
+                let query: CoreQuery = input.clone().into();
+                let Some(model_name) = query
+                    .name
+                    .clone()
+                    .or_else(|| query.source_model.as_ref().map(|s| s.model.clone()))
+                else {
+                    continue;
+                };
+
+                let Ok(Some(model)) = storage.get_model(&model_name, None).await else {
+                    continue;
+                };
+                let Ok(Some(datasource)) = storage.get_datasource(&model.datasource).await else {
+                    continue;
+                };
+                let Ok(sql) = sql_engine.generate_sql(&query) else {
+                    continue;
+                };
+                match sql_engine.execute_sqlx(&datasource, &sql).await {
+                    Ok(results) => {
+                        let columns = if !results.is_empty() {
+                            results[0].keys().cloned().collect()
+                        } else {
+                            vec![]
+                        };
+                        let data: Vec<JsonValue> = results
+                            .into_iter()
+                            .map(|m| serde_json::to_value(m).unwrap())
+                            .collect();
+                        yield QueryResponse {
+                            data,
+                            columns,
+                            sql: Some(sql),
+                            attributes: None,
+                            population: None,
+                            population_inferred: false,
+                            execution_time_ms: start.elapsed().as_millis() as f64,
+                        };
+                    }
+                    Err(_) => continue,
+                }
+            }
+        }
     }
 
-    /// Subscribe to model changes
+    /// Subscribe to model changes (best-effort polling of model list fingerprints).
     async fn model_changes(
         &self,
         _ctx: &Context<'_>,
-        _datasource: String,
+        datasource: String,
     ) -> impl futures::Stream<Item = ModelChangeEvent> {
-        // Would listen to model change events
-        futures::stream::empty()
+        let storage = self.storage.clone();
+        async_stream::stream! {
+            let mut last = String::new();
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(2));
+            loop {
+                ticker.tick().await;
+                let Ok(models) = storage.list_models(Some(&datasource)).await else {
+                    continue;
+                };
+                let fingerprint = models
+                    .iter()
+                    .map(|m| format!("{}:{}", m.name, m.description.clone().unwrap_or_default()))
+                    .collect::<Vec<_>>()
+                    .join("|");
+                if fingerprint != last {
+                    if !last.is_empty() {
+                        for m in &models {
+                            yield ModelChangeEvent {
+                                event_type: "updated".to_string(),
+                                model_name: m.name.clone(),
+                                datasource: m.datasource.clone(),
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                            };
+                        }
+                    }
+                    last = fingerprint;
+                }
+            }
+        }
     }
 }

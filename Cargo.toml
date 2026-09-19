@@ -51,7 +51,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # GraphQL + HTTP
 async-graphql = { version = "7.0", features = ["chrono"] }
 async-graphql-axum = "7.0"
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "ws"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 
 # Python bindings
@@ -80,10 +80,14 @@ lru = "0.12"
 dashmap = "5.5"
 parking_lot = "0.12"
 
+# Streaming helpers
+async-stream = "0.3"
+
 # Testing
 # testcontainers = "0.19"
 pretty_assertions = "1.4"
 tempfile = "3.10"
+criterion = "0.5"
 # proptest = "1.0"
 
 [profile.release]

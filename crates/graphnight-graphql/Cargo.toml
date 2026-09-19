@@ -19,6 +19,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
+async-stream = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

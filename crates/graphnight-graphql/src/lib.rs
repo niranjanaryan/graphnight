@@ -20,7 +20,7 @@ pub fn build_schema(sql_engine: Arc<SqlEngine>, storage: Arc<dyn StorageBackend>
     Schema::build(
         QueryRoot::new(sql_engine.clone(), storage.clone()),
         MutationRoot::new(sql_engine.clone(), storage.clone()),
-        SubscriptionRoot,
+        SubscriptionRoot::new(sql_engine.clone(), storage.clone()),
     )
     .directive(AuthDirective)
     .directive(RateLimitDirective)

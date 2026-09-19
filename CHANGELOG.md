@@ -21,6 +21,11 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - **`PolicyEnforcer` on the live query path** (model/datasource allowlists, forced filters, RLS, max rows)
 - Admin gates on datasource/model mutations when auth is required
 - Tenant hint via `X-Tenant-Id` → forced `tenant_id` filter
+- **Plan cache** (LRU) and **result cache** (LRU + TTL) in `SqlEngine`
+- **Row streaming** executor (`sqlx::fetch`) with Postgres/MySQL statement timeouts
+- Prometheus text metrics at `GET /metrics`
+- GraphQL WebSocket subscriptions at `/graphql/ws` (`liveQuery` polling, `modelChanges`)
+- Criterion benches: `cargo bench -p graphnight-sql`
 
 ## [0.1.0-alpha] - 2026-09-20
 

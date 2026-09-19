@@ -26,8 +26,14 @@ futures = { workspace = true }
 pin-project-lite = { workspace = true }
 tracing = { workspace = true }
 regex = { workspace = true }
+async-stream = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 graphnight-storage = { path = "../graphnight-storage" }
 tokio = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "sql_generate"
+harness = false

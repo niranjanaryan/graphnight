@@ -311,6 +311,43 @@ fn test_or_condition() {
 }
 
 #[test]
+fn test_plan_cache_hits() {
+    use graphnight_sql::executor::{ConnectionManager, QueryExecutor};
+    use graphnight_sql::SqlEngine;
+    use std::sync::Arc;
+
+    let model = create_test_model();
+    let engine = SqlEngine::new(
+        Box::new(PostgresDialect),
+        Arc::new(QueryExecutor::new(Arc::new(ConnectionManager::new()))),
+    )
+    .unwrap()
+    .with_models(vec![model]);
+
+    let query = Query::new()
+        .with_name("orders")
+        .add_measure(Measure::simple("revenue", AggregationType::Sum));
+
+    let sql1 = engine.generate_sql(&query).unwrap();
+    let sql2 = engine.generate_sql(&query).unwrap();
+    assert_eq!(sql1, sql2);
+    assert!(
+        engine
+            .metrics()
+            .plan_cache_hits
+            .load(std::sync::atomic::Ordering::Relaxed)
+            >= 1
+    );
+    assert!(
+        engine
+            .metrics()
+            .plan_cache_misses
+            .load(std::sync::atomic::Ordering::Relaxed)
+            >= 1
+    );
+}
+
+#[test]
 fn test_formula_shorthand_and_ratio() {
     let model = create_test_model();
     let dialect = PostgresDialect;

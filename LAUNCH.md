@@ -84,12 +84,13 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 ### B3. Reliability & performance
 
 - [ ] Integration tests against real Postgres/MySQL (testcontainers)
-- [ ] Connection pool acquire/idle/statement timeouts
-- [ ] Query plan cache + result cache with invalidation
-- [ ] True streaming for large results (no full materialization)
+- [x] Connection pool acquire/idle + statement timeouts (Postgres/MySQL)
+- [x] Query plan cache + result cache with invalidation on model mutate
+- [x] Streaming fetch in executor (GraphQL still buffers each response payload)
 - [ ] Multi-stage DAG with topological sort (not sequential stub)
-- [ ] Load test baselines and regression budgets
+- [x] Criterion bench baseline (`graphnight-sql`)
 - [ ] HA story for metadata (shared store, not single-node YAML only)
+- [x] Prometheus `/metrics` counters (queries, cache hits/misses, rows)
 
 ### B4. Product surface (production-expected)
 

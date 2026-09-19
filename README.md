@@ -146,5 +146,5 @@ Tracked in [LAUNCH.md](LAUNCH.md):
 1. **v0.1.0-alpha** — semantic core demo (formulas, joins, CLI init, honest stubs) — shipped
 2. **Debt train** — sqlx 0.8 + Axum server — done on `main`
 3. **v0.2** — API-key auth + `PolicyEnforcer` on the live path — done on `main`
-4. **v0.3-beta** — caching, streaming, benches
+4. **v0.3-beta** — plan/result cache, streaming executor, `/metrics`, Criterion benches — on `main`
 5. **v1.0** — OIDC/SSO, durable audit, production ops when LAUNCH section B is green
