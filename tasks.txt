@@ -1,0 +1,45 @@
+201~200~Partially Implemented / Missing
+Feature	Status	Notes
+Multi-stage DAG query execution	⚠️ Sequential only	No topological sort / parallel execution
+DataFusion integration	⚠️ Stub only	datafusion.rs is a placeholder
+Query plan cache	❌ Not implemented	LRU cache planned
+Prepared statement caching	❌ Not implemented	 
+Result caching (Redis/memory)	❌ Not implemented	 
+REST API (axum)	❌ Not implemented	Only GraphQL server
+MCP server	❌ Not implemented	 
+Flight SQL / Postgres wire protocol	❌ Not implemented	 
+Importers (dbt, Cube, Ossie)	❌ Not implemented	 
+Partition pruning / join optimization	❌ Not implemented	 
+Vectorized execution	❌ Not implemented	 
+pandas DataFrame support	❌ Not implemented	Python stub only
+Type stubs (.pyi)	❌ Not implemented	 
+Tests	❌ 0 tests	No unit/integration tests
+Documentation	❌ Not generated	 
+CI/CD pipeline	❌ Not configured	 
+🚫 Critical Gaps for Public Launch
+1. No tests - Zero unit/integration tests
+2. No multi-stage DAG execution - Sequential only
+3. No result caching - Performance will suffer at scale
+4. No REST API - Only GraphQL interface
+5. No MCP/Flight SQL - Missing key interfaces from blueprint
+6. Python pandas support - Stubs only
+7. No observability - No metrics, tracing, health checks beyond /health
+8. SQLite storage - Has basic implementation but needs verification
+9. Tantivy deletion - Not implemented (rebuild index needed)
+Verdict: NOT READY for public customer launch
+The core engine is solid (~70% of Phase 1-2 complete), but missing critical production features:
+Testing (0 tests)
+Multi-stage DAG
+Caching layer
+Additional interfaces (REST, MCP, Flight SQL)
+Observability
+Performance optimizations
+Recommended next steps before launch:
+1. Add comprehensive test suite (unit + integration with testcontainers)
+2. Implement multi-stage DAG with topological sort
+3. Add query plan cache + result caching
+4. Build REST API (axum) alongside GraphQL
+5. Add MCP server for agent integration
+6. Implement Python pandas DataFrame support
+7. Add observability (Prometheus metrics, OpenTelemetry tracing)
+8. Run benchmarks and optimize
