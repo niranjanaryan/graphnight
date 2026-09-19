@@ -130,7 +130,13 @@ Still do **not** expose this to the internet with production warehouse credentia
 
 ## Python
 
-Experimental PyO3 bindings live under `crates/graphnight-python/`. They are **not** published to PyPI in this alpha. The root `pyproject.toml` is a workspace marker only.
+```bash
+pip install graphnight
+```
+
+PyPI: https://pypi.org/project/graphnight/ (`0.4.0`)
+
+Bindings live under `crates/graphnight-python/` (Rust extension). Prebuilt wheel is currently **macOS arm64**; other platforms build from the sdist (needs a Rust toolchain). Optional: `pip install 'graphnight[pandas]'`.
 
 ## Development
 

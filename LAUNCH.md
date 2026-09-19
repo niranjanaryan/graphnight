@@ -26,6 +26,8 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 - [x] Empty `api/` / placeholder dirs removed; workspace at repo root (`crates/`)
 - [x] Root `pyproject.toml` is a non-publishable workspace marker (Python = experimental)
 - [x] `CONTRIBUTING.md` + `SECURITY.md`
+- [x] GitHub Releases published
+- [x] PyPI `graphnight` 0.4.0 published (macOS arm64 wheel + sdist; expand CI wheels later)
 
 ### Product honesty
 
