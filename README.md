@@ -124,7 +124,7 @@ cargo run -p graphnight-server -- --host 127.0.0.1 --storage-path ./examples/dat
 # curl -H 'Authorization: Bearer secret1' ...
 ```
 
-When keys are set: anonymous requests fail; queries use `PolicyEnforcer`; datasource/model writes need an admin key. See [SECURITY.md](SECURITY.md).
+When keys are set: anonymous requests fail; queries use `PolicyEnforcer`; datasource/model writes need an admin key. See [SECURITY.md](SECURITY.md) for CORS (`GRAPHNIGHT_CORS_ORIGINS`), TLS (terminate at a reverse proxy), and `env:VARNAME` datasource secret refs.
 
 Still do **not** expose this to the internet with production warehouse credentials (no OIDC/SSO, audit is not durable yet).
 

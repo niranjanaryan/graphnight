@@ -7,7 +7,9 @@ type = "yaml"
 path = "./examples/data"
 
 # Example datasource — replace with your own credentials.
-# WARNING: Alpha builds expose GraphQL with no authentication.
+# Prefer secret refs: connection_string = "env:GRAPHNIGHT_DATASOURCE_DEMO"
+# (set GRAPHNIGHT_REQUIRE_SECRET_REFS=1 to require env: refs on GraphQL writes).
+# WARNING: Alpha builds expose GraphQL with no authentication unless API keys are set.
 # Do not point this at production databases.
 [datasources.demo]
 driver = "sqlite"

@@ -13,6 +13,7 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - Upgrade sqlx from 0.7 to **0.8.6** (`runtime-tokio`, `tls-none`)
 - Migrate GraphQL HTTP server from Tide to **Axum 0.8** with GraphiQL at `/graphql`
 - Drop unused `tide` / `async-graphql-tide` dependencies from the GraphQL crate
+- **CORS** no longer uses `CorsLayer::permissive()`; default allowlist is localhost only
 
 ### Added
 
@@ -32,6 +33,10 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - CI step runs `cargo test -p graphnight-e2e`
 - **Dockerfile** + **docker-compose.yml** (multi-stage release build of `graphnight-server` + `graphnight` CLI; data volume; API key env)
 - Deep **`GET /health`** JSON (`storage` via `list_models`, open pool counts); returns **503** when storage fails
+- **`GRAPHNIGHT_CORS_ORIGINS`** (comma allowlist, `*` for open with warning; empty → localhost)
+- **`env:VARNAME` connection-string refs** resolved at pool connect; config startup validates refs
+- **`GRAPHNIGHT_REQUIRE_SECRET_REFS`** rejects raw connection strings on GraphQL datasource mutations
+- TLS guidance in `SECURITY.md` / `.env.example` (terminate at reverse proxy; no in-process TLS yet)
 
 ## [0.1.0-alpha] - 2026-09-20
 

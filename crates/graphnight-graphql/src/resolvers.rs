@@ -7,6 +7,7 @@ use crate::schema::*;
 use async_graphql::*;
 use graphnight_core::models::{DataSource, Model, Query as CoreQuery};
 use graphnight_core::security::AuditEntry;
+use graphnight_core::validate_connection_string_input;
 use graphnight_sql::SqlEngine;
 use graphnight_storage::StorageBackend;
 use std::sync::Arc;
@@ -442,6 +443,8 @@ impl MutationRoot {
         input: CreateDatasourceInput,
     ) -> Result<DatasourceInfo> {
         require_admin_if_auth(ctx)?;
+        validate_connection_string_input(&input.connection_string)
+            .map_err(Error::new)?;
         let ds = DataSource {
             name: input.name.clone(),
             driver: input.driver,
@@ -480,6 +483,7 @@ impl MutationRoot {
             ds.description = Some(desc);
         }
         if let Some(conn_str) = input.connection_string {
+            validate_connection_string_input(&conn_str).map_err(Error::new)?;
             ds.connection_string = conn_str;
         }
         if let Some(pool_size) = input.pool_size {

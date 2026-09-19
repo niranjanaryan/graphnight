@@ -63,8 +63,9 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
   - [ ] query timeout enforced end-to-end
   - [ ] column masks on response
 - [x] Lock down datasource/model mutations (admin-only when auth required)
-- [ ] Secret references (env / vault) instead of plaintext connection strings in APIs
-- [ ] TLS (terminate at proxy or in-process); CORS is permissive today
+- [x] Secret references: `env:VARNAME` resolution + `GRAPHNIGHT_REQUIRE_SECRET_REFS` (vault not yet)
+- [x] CORS configurable via `GRAPHNIGHT_CORS_ORIGINS` (default localhost-only; `*` warns)
+- [x] TLS documented: terminate at reverse proxy; in-process TLS not implemented
 - [ ] Rate limiting that actually enforces quotas
 - [ ] Parameterized / safely bound SQL values; SQL injection review
 - [x] Durable audit log (JSONL via `GRAPHNIGHT_AUDIT_LOG`, default `./graphnight_data/audit.jsonl`)

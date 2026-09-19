@@ -3,6 +3,7 @@ use async_stream::try_stream;
 use futures::Stream;
 use futures::StreamExt;
 use graphnight_core::models::DataSource;
+use graphnight_core::resolve_connection_string;
 use serde_json::Value;
 use sqlx::{Column, MySql, Pool, Postgres, Row, Sqlite};
 use std::collections::HashMap;
@@ -38,6 +39,10 @@ impl ConnectionManager {
         self
     }
 
+    fn resolved_connection_string(ds: &DataSource) -> Result<String> {
+        resolve_connection_string(&ds.connection_string).map_err(|e| anyhow!(e))
+    }
+
     /// Get or create a PostgreSQL pool
     pub async fn get_pg_pool(&self, ds: &DataSource) -> Result<Pool<Postgres>> {
         let mut pools = self.pg_pools.write().await;
@@ -45,12 +50,13 @@ impl ConnectionManager {
             return Ok(pool.clone());
         }
 
+        let conn = Self::resolved_connection_string(ds)?;
         let pool_size = ds.pool_size.unwrap_or(10);
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(pool_size)
             .acquire_timeout(Duration::from_secs(30))
             .idle_timeout(Duration::from_secs(600))
-            .connect(&ds.connection_string)
+            .connect(&conn)
             .await?;
 
         // Apply statement timeout for this session defaults via SET on first use in execute.
@@ -66,12 +72,13 @@ impl ConnectionManager {
             return Ok(pool.clone());
         }
 
+        let conn = Self::resolved_connection_string(ds)?;
         let pool_size = ds.pool_size.unwrap_or(10);
         let pool = sqlx::mysql::MySqlPoolOptions::new()
             .max_connections(pool_size)
             .acquire_timeout(Duration::from_secs(30))
             .idle_timeout(Duration::from_secs(600))
-            .connect(&ds.connection_string)
+            .connect(&conn)
             .await?;
 
         pools.insert(ds.name.clone(), pool.clone());
@@ -86,10 +93,11 @@ impl ConnectionManager {
             return Ok(pool.clone());
         }
 
+        let conn = Self::resolved_connection_string(ds)?;
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(1)
             .acquire_timeout(Duration::from_secs(30))
-            .connect(&ds.connection_string)
+            .connect(&conn)
             .await?;
 
         pools.insert(ds.name.clone(), pool.clone());

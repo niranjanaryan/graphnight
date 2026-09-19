@@ -1,4 +1,5 @@
 mod auth_config;
+mod cors_config;
 
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
@@ -11,7 +12,9 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use cors_config::cors_layer_from_env;
 use graphnight_core::models::DataSource;
+use graphnight_core::resolve_connection_string;
 use graphnight_core::security::{AuditSink, JsonlAuditSink};
 use graphnight_graphql::{build_schema, context::GraphQLContext, AppSchema};
 use graphnight_sql::{
@@ -21,7 +24,6 @@ use graphnight_sql::{
 };
 use graphnight_storage::{StorageBackend, YamlStorage};
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -160,6 +162,11 @@ async fn main() -> anyhow::Result<()> {
                 );
                 continue;
             }
+            // Keep env: refs as-is in storage; ConnectionManager resolves at connect.
+            // Resolve once here so misconfigured refs fail at startup.
+            resolve_connection_string(&ds_config.connection_string).map_err(|e| {
+                anyhow::anyhow!("datasource '{name}' connection_string: {e}")
+            })?;
             let ds = DataSource {
                 name,
                 driver: ds_config.driver,
@@ -216,7 +223,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
+        .layer(cors_layer_from_env())
         .with_state(state);
 
     let addr = format!("{host}:{port}");
@@ -224,6 +231,10 @@ async fn main() -> anyhow::Result<()> {
     info!("Server listening on http://{addr}");
     info!("GraphiQL: http://{addr}/graphql");
     info!("GraphQL WS: ws://{addr}/graphql/ws");
+    info!(
+        "TLS: terminate at a reverse proxy (nginx/Caddy/Traefik). \
+         In-process TLS is not implemented yet."
+    );
     axum::serve(listener, app).await?;
 
     Ok(())
