@@ -1,0 +1,44 @@
+services:
+  server:
+    build: .
+    image: graphnight:local
+    ports:
+      - "8080:8080"
+    volumes:
+      - graphnight-data:/data
+      # Optional: mount local models/config over the image defaults
+      # - ./examples/data:/data
+      # - ./examples/graphnight.toml:/app/examples/graphnight.toml:ro
+    environment:
+      # Comma-separated user:key pairs. When set, GraphQL requires Authorization: Bearer <key>
+      GRAPHNIGHT_API_KEYS: ${GRAPHNIGHT_API_KEYS:-}
+      GRAPHNIGHT_ADMIN_KEYS: ${GRAPHNIGHT_ADMIN_KEYS:-}
+      # Set to 1 to require auth even without keys configured
+      GRAPHNIGHT_AUTH_REQUIRED: ${GRAPHNIGHT_AUTH_REQUIRED:-}
+      # Set to 1 to silence the open-auth warning in local demos
+      GRAPHNIGHT_DEV_OPEN: ${GRAPHNIGHT_DEV_OPEN:-1}
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --storage-path
+      - /data
+      - --config
+      - /app/examples/graphnight.toml
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:8080/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  graphnight-data:

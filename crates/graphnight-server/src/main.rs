@@ -5,10 +5,10 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use auth_config::{extract_api_key, extract_tenant, AuthConfig};
 use axum::{
     extract::State,
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse},
     routing::{get, get_service},
-    Router,
+    Json, Router,
 };
 use clap::Parser;
 use graphnight_core::models::DataSource;
@@ -16,7 +16,7 @@ use graphnight_core::security::{AuditSink, JsonlAuditSink};
 use graphnight_graphql::{build_schema, context::GraphQLContext, AppSchema};
 use graphnight_sql::{
     dialects::get_dialect,
-    executor::{ConnectionManager, QueryExecutor},
+    executor::{ConnectionManager, PoolCounts, QueryExecutor},
     SqlEngine,
 };
 use graphnight_storage::{StorageBackend, YamlStorage};
@@ -89,8 +89,25 @@ struct AppState {
     schema: AppSchema,
     sql_engine: Arc<SqlEngine>,
     storage: Arc<dyn StorageBackend>,
+    conn_manager: Arc<ConnectionManager>,
     auth: AuthConfig,
     audit_sink: Arc<dyn AuditSink>,
+}
+
+#[derive(serde::Serialize)]
+struct HealthBody {
+    status: &'static str,
+    storage: StorageHealth,
+    pools: PoolCounts,
+}
+
+#[derive(serde::Serialize)]
+struct StorageHealth {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    models: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[tokio::main]
@@ -183,6 +200,7 @@ async fn main() -> anyhow::Result<()> {
         schema,
         sql_engine,
         storage,
+        conn_manager,
         auth,
         audit_sink,
     };
@@ -240,8 +258,34 @@ async fn graphiql() -> impl IntoResponse {
     Html(GraphiQLSource::build().endpoint("/graphql").finish())
 }
 
-async fn health() -> &'static str {
-    "OK"
+async fn health(State(state): State<AppState>) -> impl IntoResponse {
+    let pools = state.conn_manager.pool_counts().await;
+    match state.storage.list_models(None).await {
+        Ok(models) => (
+            StatusCode::OK,
+            Json(HealthBody {
+                status: "ok",
+                storage: StorageHealth {
+                    ok: true,
+                    models: Some(models.len()),
+                    error: None,
+                },
+                pools,
+            }),
+        ),
+        Err(err) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(HealthBody {
+                status: "unavailable",
+                storage: StorageHealth {
+                    ok: false,
+                    models: None,
+                    error: Some(err.to_string()),
+                },
+                pools,
+            }),
+        ),
+    }
 }
 
 async fn metrics(State(state): State<AppState>) -> String {

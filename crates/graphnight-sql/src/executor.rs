@@ -101,6 +101,18 @@ impl ConnectionManager {
         self.statement_timeout
     }
 
+    /// Counts of currently open pools per driver (lazy-created on first query).
+    pub async fn pool_counts(&self) -> PoolCounts {
+        let postgres = self.pg_pools.read().await.len();
+        let mysql = self.mysql_pools.read().await.len();
+        let sqlite = self.sqlite_pools.read().await.len();
+        PoolCounts {
+            postgres,
+            mysql,
+            sqlite,
+        }
+    }
+
     /// Close all pools
     pub async fn close_all(&self) {
         let pg_pools = self.pg_pools.write().await;
@@ -109,6 +121,14 @@ impl ConnectionManager {
             info!("Closed PostgreSQL pool: {}", name);
         }
     }
+}
+
+/// Snapshot of open connection pools for health / ops endpoints.
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+pub struct PoolCounts {
+    pub postgres: usize,
+    pub mysql: usize,
+    pub sqlite: usize,
 }
 
 impl Default for ConnectionManager {

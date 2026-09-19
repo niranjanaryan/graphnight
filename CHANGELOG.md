@@ -30,6 +30,8 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 - **E2E crate** `tests/e2e` (`graphnight-e2e`): examples YAML load → SQL dry-run (Postgres + SQLite dialects) → execute against temp SQLite `orders` table; Postgres testcontainers stub `#[ignore]`d
 - GraphQL auth e2e: admin + `auth_required` succeeds on non-destructive dry-run query
 - CI step runs `cargo test -p graphnight-e2e`
+- **Dockerfile** + **docker-compose.yml** (multi-stage release build of `graphnight-server` + `graphnight` CLI; data volume; API key env)
+- Deep **`GET /health`** JSON (`storage` via `list_models`, open pool counts); returns **503** when storage fails
 
 ## [0.1.0-alpha] - 2026-09-20
 

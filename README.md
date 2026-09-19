@@ -61,8 +61,19 @@ Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Concepts
   --port 8080
 ```
 
-Health check: `curl http://127.0.0.1:8080/health`  
+Health check (JSON; `503` if metadata storage is unreachable):  
+`curl -s http://127.0.0.1:8080/health`  
 GraphQL: `POST http://127.0.0.1:8080/graphql`
+
+### Docker
+
+```bash
+docker compose up --build
+# http://127.0.0.1:8080/health
+# optional auth: GRAPHNIGHT_API_KEYS=alice:secret1 docker compose up --build
+```
+
+Data persists in the `graphnight-data` volume (`/data` in the container). Image includes `graphnight-server` and the `graphnight` CLI.
 
 ```bash
 curl http://127.0.0.1:8080/graphql \

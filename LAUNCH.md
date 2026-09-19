@@ -71,11 +71,11 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 
 ### B2. Observability & ops
 
-- [ ] Deep `/health` (storage + DB pool checks)
+- [x] Deep `/health` (storage + DB pool checks)
 - [ ] Prometheus `/metrics` (QPS, latency, errors, pool usage)
 - [ ] OpenTelemetry traces for plan → SQL → execute
 - [ ] Structured logging with request IDs
-- [ ] Dockerfile + compose (and optionally Helm)
+- [x] Dockerfile + compose (and optionally Helm)
 - [ ] Config via env; no secrets in git
 - [ ] Backup / restore for metadata storage
 - [ ] Runbook: deploy, rollback, rotate credentials, incident response
