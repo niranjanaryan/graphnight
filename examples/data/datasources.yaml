@@ -1,0 +1,9 @@
+- name: demo
+  driver: sqlite
+  connection_string: sqlite:./examples/data/demo.db
+  description: Local demo SQLite database
+  models:
+    - orders
+    - customers
+  pool_size: 1
+  meta: {}

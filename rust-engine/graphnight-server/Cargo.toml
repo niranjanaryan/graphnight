@@ -1,0 +1,30 @@
+[package]
+name = "graphnight-server"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+
+[[bin]]
+name = "graphnight-server"
+path = "src/main.rs"
+
+[dependencies]
+graphnight-core = { path = "../graphnight-core" }
+graphnight-sql = { path = "../graphnight-sql" }
+graphnight-storage = { path = "../graphnight-storage" }
+graphnight-graphql = { path = "../graphnight-graphql" }
+async-graphql = { workspace = true }
+async-graphql-tide = { workspace = true }
+tide = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+config = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+toml = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }

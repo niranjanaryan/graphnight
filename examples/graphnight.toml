@@ -1,0 +1,16 @@
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[storage]
+type = "yaml"
+path = "./examples/data"
+
+# Example datasource — replace with your own credentials.
+# WARNING: Alpha builds expose GraphQL with no authentication.
+# Do not point this at production databases.
+[datasources.demo]
+driver = "sqlite"
+connection_string = "sqlite:./examples/data/demo.db"
+description = "Local demo SQLite database"
+pool_size = 1

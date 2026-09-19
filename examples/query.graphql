@@ -1,0 +1,28 @@
+# Dry-run a semantic query (returns generated SQL)
+query DryRunOrders {
+  query(
+    input: {
+      name: "orders"
+      measures: [
+        { formula: "amount_usd", aggregation: SUM, label: "Revenue (USD)" }
+        { formula: "*", aggregation: COUNT, label: "Orders" }
+      ]
+      dimensions: [{ name: "status", label: "Order Status" }]
+      limit: 100
+    }
+    dryRun: true
+  ) {
+    sql
+    columns
+    executionTimeMs
+  }
+}
+
+# List registered models
+query ListModels {
+  models {
+    name
+    datasource
+    description
+  }
+}

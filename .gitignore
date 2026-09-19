@@ -1,3 +1,40 @@
+# OS
 .DS_Store
-.DS_Store
-rust-engine/.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Rust
+rust-engine/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+dist/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Local runtime / tooling
+graphnight_data/
+*.db
+*.sqlite
+codedb.snapshot
+.env
+.env.*
+!.env.example
+
+# Logs / coverage
+*.log
+coverage/
+lcov.info

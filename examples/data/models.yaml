@@ -1,0 +1,50 @@
+- name: orders
+  datasource: demo
+  description: Order facts for the demo warehouse
+  measures:
+    - formula:
+        expression: amount_usd
+        label: Revenue (USD)
+        format: currency_usd
+      aggregation: sum
+    - formula:
+        expression: "*"
+        label: Orders
+        format: null
+      aggregation: count
+  dimensions:
+    - name: status
+      label: Order Status
+    - name: customer_id
+      label: Customer
+  time_dimensions:
+    - dimension: created_at
+      granularity: day
+  joins:
+    - name: customers
+      model: customers
+      join_type: left
+      on:
+        - [customer_id, id]
+      alias: cust
+  sql: null
+  meta: {}
+
+- name: customers
+  datasource: demo
+  description: Customer dimension
+  measures:
+    - formula:
+        expression: "*"
+        label: Customers
+        format: null
+      aggregation: count
+  dimensions:
+    - name: id
+      label: Customer ID
+    - name: segment
+      label: Segment
+  time_dimensions: []
+  joins: []
+  sql: null
+  meta: {}

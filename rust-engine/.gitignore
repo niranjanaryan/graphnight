@@ -1,7 +1,6 @@
-# Cargo
+# Cargo build artifacts
 target/
 **/*.rs.bk
-Cargo.lock
 
 # IDE
 .idea/
@@ -13,7 +12,8 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
-# Python
+# Python extension build
 *.pyc
 __pycache__/
 *.so
+*.dylib
