@@ -1,0 +1,36 @@
+# Admin-only when auth is required (GRAPHNIGHT_ADMIN_KEYS / OIDC admin claim).
+# Prefer defining models in YAML for demos; use this to register via GraphQL.
+mutation CreateOrdersLite {
+  createModel(
+    input: {
+      name: "orders_lite"
+      datasource: "demo"
+      description: "Minimal orders model created via GraphQL"
+      measures: [
+        { formula: "amount_usd", aggregation: SUM, label: "Revenue" }
+        { formula: "*", aggregation: COUNT, label: "Orders" }
+      ]
+      dimensions: [
+        { name: "status", label: "Status" }
+        { name: "customer_id", label: "Customer" }
+      ]
+      timeDimensions: [{ dimension: "created_at", granularity: DAY }]
+      joins: [
+        {
+          name: "customers"
+          model: "customers"
+          joinType: LEFT
+          on: [{ left: "customer_id", right: "id" }]
+          alias: "cust"
+        }
+      ]
+    }
+  ) {
+    name
+    datasource
+    description
+    measures
+    dimensions
+    timeDimensions
+  }
+}

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Call GraphQL with an OIDC JWT bearer token.
+#
+# Copy to curl-oidc.sh (gitignored locally if you prefer) and fill in values.
+# GraphNight validates Bearer JWTs when GRAPHNIGHT_OIDC_ISSUER is set (JWKS via
+# OpenID discovery). Tokens that look like JWTs (two '.' separators) are tried
+# as OIDC first; otherwise API-key matching is used.
+#
+# Server env (example):
+#   export GRAPHNIGHT_OIDC_ISSUER='https://login.example.com/realms/app'
+#   export GRAPHNIGHT_OIDC_AUDIENCE='graphnight-api'          # optional
+#   export GRAPHNIGHT_OIDC_CLIENT_ID='graphnight'             # optional aud alt
+#   export GRAPHNIGHT_OIDC_ADMIN_CLAIM='roles'                # default roles
+#   export GRAPHNIGHT_OIDC_ADMIN_VALUES='admin,Admin'         # default admin
+#   export GRAPHNIGHT_OIDC_TENANT_CLAIM='tenant_id'           # default tenant_id
+#
+# Obtain ACCESS_TOKEN from your IdP (password grant, device flow, etc.) — do not
+# commit real tokens.
+#
+# Usage:
+#   ACCESS_TOKEN='eyJ...' ./examples/auth/curl-oidc.sh.example
+
+set -euo pipefail
+
+BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
+ACCESS_TOKEN="${ACCESS_TOKEN:?set ACCESS_TOKEN to a signed JWT from your IdP}"
+TENANT_ID="${TENANT_ID:-}"
+
+HEADERS=(-H "content-type: application/json" -H "Authorization: Bearer ${ACCESS_TOKEN}")
+if [[ -n "${TENANT_ID}" ]]; then
+  # Used when the JWT has no tenant claim (fills SessionPolicy forced filter).
+  HEADERS+=(-H "X-Tenant-Id: ${TENANT_ID}")
+fi
+
+echo "== dry-run query (OIDC JWT) =="
+curl -fsS "${BASE_URL}/graphql" \
+  "${HEADERS[@]}" \
+  -d @- <<'EOF'
+{
+  "query": "query { query(input: { name: \"orders\", measures: [{ formula: \"amount_usd\", aggregation: SUM, label: \"Revenue\" }], dimensions: [{ name: \"status\" }], limit: 10 }, dryRun: true) { sql columns executionTimeMs } }"
+}
+EOF
+echo

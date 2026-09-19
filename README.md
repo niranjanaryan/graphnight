@@ -49,6 +49,8 @@ cargo run -p graphnight-cli -- \
   query dry-run --file ./examples/query.json
 ```
 
+More samples (auth curls, GraphQL docs, HA, ratio/join dry-runs): **[examples/README.md](examples/README.md)**.
+
 Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Concepts: [docs/concepts.md](docs/concepts.md).
 
 ### Run the server
@@ -107,11 +109,17 @@ EOF
 
 | Path | Purpose |
 |------|---------|
-| `examples/graphnight.toml` | Server config |
+| [`examples/README.md`](examples/README.md) | Index of all examples |
+| `examples/graphnight.toml` | Server config (YAML metadata) |
+| `examples/graphnight.postgres.toml` | HA Postgres metadata config |
 | `examples/data/models.yaml` | Demo semantic models |
 | `examples/data/datasources.yaml` | Demo datasource |
 | `examples/query.json` | CLI query payload |
 | `examples/query.graphql` | GraphQL examples |
+| `examples/queries/` | Extra CLI dry-run JSON |
+| `examples/graphql/` | GraphQL ops + curl one-liners |
+| `examples/auth/` | API key / OIDC curls + policy notes |
+| `examples/ha/` | Compose `--profile ha` notes |
 
 ## Repository layout
 
@@ -125,7 +133,7 @@ crates/
   graphnight-server/       # Axum GraphQL server binary
   graphnight-cli/          # CLI binary
   graphnight-python/       # PyO3 bindings (early)
-examples/                  # sample config + models
+examples/                  # sample config, models, auth/GraphQL/HA usage
 docs/                      # getting started + concepts
 ```
 

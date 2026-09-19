@@ -1,0 +1,33 @@
+{
+  "name": "orders",
+  "measures": [
+    {
+      "formula": {
+        "expression": "amount_usd",
+        "label": "Revenue (USD)"
+      },
+      "aggregation": "sum"
+    },
+    {
+      "formula": {
+        "expression": "*",
+        "label": "Orders"
+      },
+      "aggregation": "count"
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "status",
+      "label": "Order Status"
+    },
+    {
+      "name": "customer_id",
+      "label": "Customer"
+    }
+  ],
+  "time_dimensions": [],
+  "filters": [],
+  "order": [],
+  "limit": 100
+}

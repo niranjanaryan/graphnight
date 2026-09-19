@@ -1,3 +1,15 @@
+# Demo semantic models for the local SQLite datasource `demo`
+# (see datasources.yaml). Both models below must stay on `demo` so e2e /
+# integration dry-runs keep working.
+#
+# Second datasource (optional): add a matching entry in datasources.yaml, e.g.
+#   - name: warehouse
+#     driver: postgres
+#     connection_string: env:GRAPHNIGHT_DATASOURCE_WAREHOUSE
+#     models: [facts]
+# then point a model at `datasource: warehouse`. Prefer env: secret refs.
+# Do not commit production credentials.
+
 - name: orders
   datasource: demo
   description: Order facts for the demo warehouse

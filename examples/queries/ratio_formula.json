@@ -1,0 +1,29 @@
+{
+  "name": "orders",
+  "measures": [
+    {
+      "formula": {
+        "expression": "ratio(amount_usd:sum, customer_id:count)",
+        "label": "Avg revenue per customer"
+      },
+      "aggregation": "avg"
+    },
+    {
+      "formula": {
+        "expression": "amount_usd",
+        "label": "Revenue (USD)"
+      },
+      "aggregation": "sum"
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "status",
+      "label": "Order Status"
+    }
+  ],
+  "time_dimensions": [],
+  "filters": [],
+  "order": [],
+  "limit": 50
+}

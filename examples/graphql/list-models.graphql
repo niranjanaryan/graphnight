@@ -1,0 +1,11 @@
+# List registered semantic models from metadata storage.
+query ListModels {
+  models {
+    name
+    datasource
+    description
+    measures
+    dimensions
+    timeDimensions
+  }
+}
