@@ -164,7 +164,11 @@ async fn examples_query_executes_against_postgres_testcontainer() {
         .connect(&conn)
         .await
         .expect("connect to testcontainer Postgres");
-    for stmt in PG_SEED_SQL.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+    for stmt in PG_SEED_SQL
+        .split(';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         sqlx::query(stmt)
             .execute(&pool)
             .await
