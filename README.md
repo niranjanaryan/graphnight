@@ -175,7 +175,7 @@ Still do **not** expose this to the internet with production warehouse credentia
 pip install graphnight
 ```
 
-PyPI: https://pypi.org/project/graphnight/ (`1.0.0`)
+PyPI: https://pypi.org/project/graphnight/ (`1.0.1`)
 
 Bindings live under `crates/graphnight-python/` (Rust extension). Multi-platform wheels are built by `.github/workflows/wheels.yml` (Linux manylinux/musllinux, macOS, Windows) and published on version tags / manual dispatch. Optional: `pip install 'graphnight[pandas]'`.
 

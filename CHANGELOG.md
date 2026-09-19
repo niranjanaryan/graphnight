@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-20
+
+Production polish: docs/examples, Python client tests, request IDs, rate limiting, runbook, SBOM CI.
+
 ### Added
 
 - Request IDs: middleware generates or propagates `x-request-id`, echoes it on responses, and records `request_id` on HTTP tracing spans
@@ -64,7 +68,8 @@ PyPI `graphnight` 0.4.0 (superseded by 1.0.0). See git tag `v0.4.0-beta` for the
 
 Initial public alpha (semantic core + `crates/` layout). See git tags `v0.1.0-alpha` … `v0.3.0-beta` for intermediate trains.
 
-[Unreleased]: https://github.com/niranjanaryan/graphnight/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/niranjanaryan/graphnight/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/niranjanaryan/graphnight/releases/tag/v1.0.1
 [1.0.0]: https://github.com/niranjanaryan/graphnight/releases/tag/v1.0.0
 [0.4.0]: https://pypi.org/project/graphnight/0.4.0/
 [0.1.0-alpha]: https://github.com/niranjanaryan/graphnight/releases/tag/v0.1.0-alpha
