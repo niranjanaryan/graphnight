@@ -13,6 +13,13 @@ services:
       # Comma-separated user:key pairs. When set, GraphQL requires Authorization: Bearer <key>
       GRAPHNIGHT_API_KEYS: ${GRAPHNIGHT_API_KEYS:-}
       GRAPHNIGHT_ADMIN_KEYS: ${GRAPHNIGHT_ADMIN_KEYS:-}
+      # OIDC JWT bearer (optional): set issuer to enable JWKS validation
+      GRAPHNIGHT_OIDC_ISSUER: ${GRAPHNIGHT_OIDC_ISSUER:-}
+      GRAPHNIGHT_OIDC_AUDIENCE: ${GRAPHNIGHT_OIDC_AUDIENCE:-}
+      GRAPHNIGHT_OIDC_CLIENT_ID: ${GRAPHNIGHT_OIDC_CLIENT_ID:-}
+      GRAPHNIGHT_OIDC_ADMIN_CLAIM: ${GRAPHNIGHT_OIDC_ADMIN_CLAIM:-}
+      GRAPHNIGHT_OIDC_ADMIN_VALUES: ${GRAPHNIGHT_OIDC_ADMIN_VALUES:-}
+      GRAPHNIGHT_OIDC_TENANT_CLAIM: ${GRAPHNIGHT_OIDC_TENANT_CLAIM:-}
       # Set to 1 to require auth even without keys configured
       GRAPHNIGHT_AUTH_REQUIRED: ${GRAPHNIGHT_AUTH_REQUIRED:-}
       # Set to 1 to silence the open-auth warning in local demos

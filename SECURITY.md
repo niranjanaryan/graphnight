@@ -6,7 +6,7 @@ GraphNight is **alpha**. There is no supported production release yet. Security 
 
 ## Auth (v0.2)
 
-Configure API keys via environment:
+### API keys
 
 ```bash
 export GRAPHNIGHT_API_KEYS='alice:secret1,bob:secret2'
@@ -19,10 +19,36 @@ export GRAPHNIGHT_ADMIN_KEYS='admin:adminsecret'
 
 Clients send `Authorization: Bearer <key>` or `X-API-Key: <key>`. Optional `X-Tenant-Id` adds a forced `tenant_id` filter.
 
-When keys are configured (and `GRAPHNIGHT_DEV_OPEN` is not set):
+### OIDC / SSO (JWT bearer)
+
+Library-only validation of Bearer JWTs (no browser login redirect UI). Set an issuer to enable:
+
+```bash
+export GRAPHNIGHT_OIDC_ISSUER='https://login.example.com/realms/app'
+# optional audience / client id (either may be checked as `aud`)
+# export GRAPHNIGHT_OIDC_AUDIENCE='graphnight-api'
+# export GRAPHNIGHT_OIDC_CLIENT_ID='graphnight'
+# admin from a claim (default claim `roles`, default value `admin`)
+# export GRAPHNIGHT_OIDC_ADMIN_CLAIM='roles'
+# export GRAPHNIGHT_OIDC_ADMIN_VALUES='admin,Admin'
+# tenant claim (default `tenant_id`; falls back to `org_id` when claim is default)
+# export GRAPHNIGHT_OIDC_TENANT_CLAIM='tenant_id'
+```
+
+At runtime GraphNight fetches `{issuer}/.well-known/openid-configuration`, then the JWKS URI, and validates signature / `iss` / `exp` (and `aud` when configured).
+
+Request handling:
+
+1. If `Authorization: Bearer` looks like a JWT (exactly two `.` separators) **and** OIDC is configured → validate via JWKS first
+2. Otherwise fall back to API key matching
+3. Map `sub` → `user_id`; admin from the admin claim/values; tenant from the tenant claim (or `X-Tenant-Id` if the token has none)
+
+When OIDC is configured (and `GRAPHNIGHT_DEV_OPEN` is not set), `auth_required` is **true** even with no API keys.
+
+When keys **or** OIDC are configured (and `GRAPHNIGHT_DEV_OPEN` is not set):
 
 - Anonymous GraphQL operations are rejected
-- Datasource/model write mutations require an **admin** key
+- Datasource/model write mutations require an **admin** identity
 - Queries run through `PolicyEnforcer` (allow/deny lists, forced filters, RLS, max rows)
 
 ## Durable audit log
@@ -94,9 +120,9 @@ Vault / cloud secret managers are not integrated yet — inject values into the 
 
 ## Remaining risks
 
-- Default without keys is still **open** (dev convenience) — set keys before any shared deployment
+- Default without keys/OIDC is still **open** (dev convenience) — set keys or OIDC before any shared deployment
 - Audit is append-only JSONL (no tamper-evidence / central shipping yet)
-- No OIDC/SSO yet
+- OIDC is JWT-bearer validation only (no authorization-code / hosted login UI)
 - Plaintext connection strings are still accepted unless `GRAPHNIGHT_REQUIRE_SECRET_REFS=1`
 - Do not expose a GraphNight server to the public internet with production warehouse credentials
 

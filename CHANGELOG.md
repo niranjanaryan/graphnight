@@ -19,6 +19,7 @@ with `-alpha` / `-beta` pre-release tags while the API is unstable.
 
 - **Postgres metadata storage** (`PostgresMetadataStorage`): `storage.type = "postgres"` with JSONB tables, `CREATE TABLE IF NOT EXISTS` on connect, connection via `storage.path` / `--storage-path` or `GRAPHNIGHT_METADATA_DATABASE_URL` (`env:VAR` refs supported). Search is `ILIKE`-only (not Tantivy). Compose profile `ha` adds optional `metadata-db` + `server-postgres`; see `examples/graphnight.postgres.toml`
 - Root `CHANGELOG.md`
+- **OIDC/SSO JWT bearer auth** (`GRAPHNIGHT_OIDC_ISSUER` + optional audience/client/admin/tenant claims): discovery + JWKS validation; JWT Bearer tried before API-key fallback; `auth_required` when OIDC is configured
 - **API key auth** (`GRAPHNIGHT_API_KEYS` / `GRAPHNIGHT_ADMIN_KEYS`) with request-scoped GraphQL context
 - **`PolicyEnforcer` on the live query path** (model/datasource allowlists, forced filters, RLS, max rows)
 - Admin gates on datasource/model mutations when auth is required

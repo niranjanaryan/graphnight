@@ -57,7 +57,8 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 ### B1. Security (hard blockers)
 
 - [x] AuthN middleware (API key) populates `user_id` / `tenant_id` / `is_admin`
-- [x] AuthZ when keys configured (fail closed); open mode only without keys or with `GRAPHNIGHT_DEV_OPEN=1`
+- [x] OIDC/SSO JWT bearer (`GRAPHNIGHT_OIDC_*`): JWKS validation, claim → user/admin/tenant
+- [x] AuthZ when keys or OIDC configured (fail closed); open mode only without credentials or with `GRAPHNIGHT_DEV_OPEN=1`
 - [x] Wire `PolicyEnforcer` into GraphQL execute path:
   - [x] model / datasource allowlists
   - [x] forced filters

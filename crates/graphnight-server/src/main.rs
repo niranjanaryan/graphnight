@@ -1,5 +1,6 @@
 mod auth_config;
 mod cors_config;
+mod oidc;
 
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
@@ -198,13 +199,19 @@ async fn main() -> anyhow::Result<()> {
     let auth = AuthConfig::from_env();
     if auth.auth_required {
         info!(
-            "Auth required ({} API keys configured)",
-            auth.api_keys.len()
+            "Auth required ({} API keys configured, OIDC {})",
+            auth.api_keys.len(),
+            if auth.oidc.is_some() {
+                "enabled"
+            } else {
+                "disabled"
+            }
         );
     } else {
         warn!(
             "GraphQL auth is OPEN. Set GRAPHNIGHT_API_KEYS / GRAPHNIGHT_ADMIN_KEYS \
-             (or GRAPHNIGHT_AUTH_REQUIRED=1). Use GRAPHNIGHT_DEV_OPEN=1 to silence this."
+             / GRAPHNIGHT_OIDC_ISSUER (or GRAPHNIGHT_AUTH_REQUIRED=1). \
+             Use GRAPHNIGHT_DEV_OPEN=1 to silence this."
         );
     }
 
@@ -257,7 +264,11 @@ async fn graphql_handler(
 ) -> GraphQLResponse {
     let api_key = extract_api_key(&headers);
     let tenant_id = extract_tenant(&headers);
-    let identity = state.auth.authenticate(api_key.as_deref(), tenant_id);
+    // JWT-shaped Bearer → OIDC (when configured); otherwise API key.
+    let identity = state
+        .auth
+        .resolve_identity(api_key.as_deref(), tenant_id)
+        .await;
 
     let mut request_ctx = GraphQLContext::new(state.sql_engine.clone(), state.storage.clone())
         .with_auth_required(state.auth.auth_required)
