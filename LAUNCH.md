@@ -19,7 +19,8 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 - [x] `README.md` with alpha warning + quickstart
 - [x] Example config / models / queries under `examples/`
 - [x] GitHub Actions CI (fmt / clippy / test / binary build)
-- [ ] Engine sources committed and pushed to `origin/main`
+- [x] Engine sources committed on local `main`
+- [ ] Push local `main` to `origin/main`
 - [ ] Tag `v0.1.0-alpha` after push
 - [ ] GitHub description, topics (`semantic-layer`, `graphql`, `rust`), homepage
 - [ ] Remove or clearly archive empty `api/` placeholder
@@ -29,13 +30,13 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 
 - [x] README states auth/RLS not enforced on live path
 - [ ] Keep `ARCHITECTURE.md` as vision; mark unimplemented sections clearly
-- [ ] Update `tasks.txt` or retire it in favor of this file
+- [x] `tasks.txt` points at this file
 
 ### Minimum quality gate
 
 - [x] `cargo test --workspace --exclude graphnight-python` passes locally
 - [ ] CI green on `main`
-- [ ] Documented security warning for open GraphQL + connection strings
+- [x] Documented security warning for open GraphQL + connection strings
 
 **Exit criteria:** clone → build → dry-run GraphQL/CLI works from docs alone; alpha labeling is unmistakable.
 
