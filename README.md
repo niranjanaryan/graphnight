@@ -11,7 +11,7 @@ This repository is an early public preview. Core query planning and SQL generati
 - Semantic models (measures, dimensions, time dimensions, joins)
 - Formula helpers (`sum`, `avg`, `count`, `time_shift`, `ratio`, …)
 - SQL generation for Postgres / MySQL / SQLite / DuckDB
-- GraphQL API + CLI
+- GraphQL API + CLI (`graphnight init`, query dry-run, model list)
 - YAML / SQLite metadata storage and Tantivy search
 - Session policy / RLS types in-library (**not yet enforced on the live request path**)
 
@@ -25,30 +25,28 @@ This repository is an early public preview. Core query planning and SQL generati
 ### Build
 
 ```bash
-cd rust-engine
 cargo build --release -p graphnight-cli -p graphnight-server
 ```
 
 ### Scaffold + dry-run (recommended)
 
 ```bash
-cd rust-engine
-cargo run -p graphnight-cli -- init ../my-project
+cargo run -p graphnight-cli -- init ./my-project
 cargo run -p graphnight-cli -- \
-  --storage-path ../my-project/graphnight_data \
-  query dry-run --file ../my-project/query.json
+  --storage-path ./my-project/graphnight_data \
+  query dry-run --file ./my-project/query.json
 ```
 
 Or use the checked-in examples:
 
 ```bash
 cargo run -p graphnight-cli -- \
-  --storage-path ../examples/data \
+  --storage-path ./examples/data \
   model list
 
 cargo run -p graphnight-cli -- \
-  --storage-path ../examples/data \
-  query dry-run --file ../examples/query.json
+  --storage-path ./examples/data \
+  query dry-run --file ./examples/query.json
 ```
 
 Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Concepts: [docs/concepts.md](docs/concepts.md).
@@ -56,8 +54,7 @@ Longer walkthrough: [docs/getting-started.md](docs/getting-started.md). Concepts
 ### Run the server
 
 ```bash
-# from repo root
-./rust-engine/target/release/graphnight-server \
+./target/release/graphnight-server \
   --config examples/graphnight.toml \
   --storage-path examples/data \
   --host 127.0.0.1 \
@@ -85,20 +82,23 @@ EOF
 | `examples/query.json` | CLI query payload |
 | `examples/query.graphql` | GraphQL examples |
 
-## Workspace layout
+## Repository layout
 
 ```text
-rust-engine/
-  graphnight-core/       # models, formulas, joins, security types
-  graphnight-sql/        # SQL generator + sqlx executor
-  graphnight-storage/    # YAML / SQLite / Tantivy
-  graphnight-graphql/    # async-graphql schema
-  graphnight-server/     # Tide GraphQL server binary
-  graphnight-cli/        # CLI binary
-  graphnight-python/     # PyO3 bindings (early)
+Cargo.toml                 # workspace root
+crates/
+  graphnight-core/         # models, formulas, joins, security types
+  graphnight-sql/          # SQL generator + sqlx executor
+  graphnight-storage/      # YAML / SQLite / Tantivy
+  graphnight-graphql/      # async-graphql schema
+  graphnight-server/       # Tide GraphQL server binary
+  graphnight-cli/          # CLI binary
+  graphnight-python/       # PyO3 bindings (early)
+examples/                  # sample config + models
+docs/                      # getting started + concepts
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP, Flight SQL, importers, caching).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP, Flight SQL, importers, caching). Many items there are vision-only.
 
 ## Security warning
 
@@ -113,18 +113,21 @@ Do not expose this process to the internet or attach production credentials.
 
 ## Python
 
-Experimental PyO3 bindings live under `rust-engine/graphnight-python/`. They are **not** published to PyPI in this alpha. The root `pyproject.toml` is a workspace marker only.
+Experimental PyO3 bindings live under `crates/graphnight-python/`. They are **not** published to PyPI in this alpha. The root `pyproject.toml` is a workspace marker only.
 
 ## Development
 
 ```bash
-cd rust-engine
 cargo test --workspace --exclude graphnight-python
 cargo fmt --all -- --check
 cargo clippy --workspace --exclude graphnight-python --all-targets
 ```
 
 CI runs unit/integration tests plus an example CLI dry-run (see `.github/workflows/ci.yml`).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
 ## License
 

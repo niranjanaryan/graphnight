@@ -1,4 +1,0 @@
-Superseded by LAUNCH.md
-
-This file previously tracked partial implementation gaps. The living OSS v0.1 and
-production launch checklist is now in LAUNCH.md.

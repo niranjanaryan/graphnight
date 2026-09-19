@@ -5,7 +5,7 @@ Early PyO3 bindings for GraphNight. **Alpha — tests are currently disabled.**
 Build with [maturin](https://www.maturin.rs/):
 
 ```bash
-cd rust-engine/graphnight-python
+cd crates/graphnight-python
 maturin develop
 ```
 

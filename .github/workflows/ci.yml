@@ -13,9 +13,6 @@ jobs:
   test:
     name: Test (Rust)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: rust-engine
     steps:
       - uses: actions/checkout@v4
 
@@ -26,8 +23,6 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust-engine
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -43,9 +38,6 @@ jobs:
     name: Build binaries
     runs-on: ubuntu-latest
     needs: test
-    defaults:
-      run:
-        working-directory: rust-engine
     steps:
       - uses: actions/checkout@v4
 
@@ -54,15 +46,12 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust-engine
 
       - name: Build CLI and server
         run: cargo build -p graphnight-cli -p graphnight-server
 
       - name: Example dry-run
-        working-directory: ${{ github.workspace }}
         run: |
-          ./rust-engine/target/debug/graphnight \
+          ./target/debug/graphnight \
             --storage-path examples/data \
             query dry-run --file examples/query.json

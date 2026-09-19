@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "graphnight-core",
-    "graphnight-sql",
-    "graphnight-storage",
-    "graphnight-graphql",
-    "graphnight-python",
-    "graphnight-server",
-    "graphnight-cli",
+    "crates/graphnight-core",
+    "crates/graphnight-sql",
+    "crates/graphnight-storage",
+    "crates/graphnight-graphql",
+    "crates/graphnight-python",
+    "crates/graphnight-server",
+    "crates/graphnight-cli",
 ]
 exclude = []
 
@@ -16,6 +16,7 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["GraphNight Team"]
+repository = "https://github.com/niranjanaryan/graphnight"
 
 [workspace.dependencies]
 # Core data processing - use custom SQL generator, avoid datafusion/parquet issues

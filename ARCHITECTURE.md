@@ -65,97 +65,25 @@ GraphNight is a high-performance, embeddable semantic layer for AI agents and hu
 
 ## Rust Workspace Structure
 
+Shipped layout (repo root workspace):
+
+```text
+Cargo.toml
+crates/
+  graphnight-core/       # models, formula, join, security types
+  graphnight-sql/        # dialects, generator, executor
+  graphnight-storage/    # yaml, sqlite, tantivy
+  graphnight-graphql/    # schema, resolvers, directives
+  graphnight-server/     # GraphQL server binary (Tide today)
+  graphnight-cli/        # CLI (init, query, model, …)
+  graphnight-python/     # early PyO3 bindings
+examples/
+docs/
 ```
-rust-engine/
-├── Cargo.toml                    # Workspace root
-├── graphnight-core/              # Core domain models & logic
-│   ├── src/
-│   │   ├── models.rs             # Query, Measure, Dimension, Model, DataSource
-│   │   ├── formula.rs            # Formula parser, registry, expressions
-│   │   ├── query/
-│   │   │   ├── planner.rs        # Logical query plan
-│   │   │   ├── optimizer.rs      # Plan optimization
-│   │   │   └── validator.rs      # Semantic validation
-│   │   ├── join/
-│   │   │   ├── walker.rs         # Join path finding
-│   │   │   └── graph.rs          # Join graph representation
-│   │   ├── security/
-│   │   │   ├── policy.rs         # Session policies, forced filters
-│   │   │   └── rls.rs            # Row-level security
-│   │   └── errors.rs             # Error types
-│   └── Cargo.toml
-│
-├── graphnight-sql/               # SQL generation & execution
-│   ├── src/
-│   │   ├── generator.rs          # SQL AST → dialect-specific SQL
-│   │   ├── dialects/
-│   │   │   ├── postgres.rs
-│   │   │   ├── mysql.rs
-│   │   │   ├── sqlite.rs
-│   │   │   └── duckdb.rs
-│   │   ├── executor.rs           # Async query execution (sqlx)
-│   │   ├── datafusion.rs         # DataFusion integration for complex queries
-│   │   └── cache.rs              # Query plan cache
-│   └── Cargo.toml
-│
-├── graphnight-storage/           # Persistence layer
-│   ├── src/
-│   │   ├── backend.rs            # StorageBackend trait
-│   │   ├── yaml.rs               # YAML file storage
-│   │   ├── sqlite.rs             # SQLite storage (embedded)
-│   │   ├── postgres.rs           # Postgres metadata storage
-│   │   ├── search.rs             # Embedding-based search (tantivy)
-│   │   └── migrations.rs         # Schema migrations
-│   └── Cargo.toml
-│
-├── graphnight-graphql/           # GraphQL API
-│   ├── src/
-│   │   ├── schema.rs             # async-graphql schema definition
-│   │   ├── resolvers/
-│   │   │   ├── query.rs          # Query resolvers
-│   │   │   ├── mutation.rs       # Mutation resolvers
-│   │   │   └── subscription.rs   # Live query subscriptions
-│   │   ├── directives/
-│   │   │   ├── auth.rs           # @auth, @rbac
-│   │   │   ├── cache.rs          # @cache
-│   │   │   └── rate_limit.rs     # @rateLimit
-│   │   └── context.rs            # Request context
-│   └── Cargo.toml
-│
-├── graphnight-python/            # Python bindings (PyO3)
-│   ├── src/
-│   │   ├── lib.rs                # Module definition
-│   │   ├── client.rs             # Python client class
-│   │   ├── query.rs              # Query model bindings
-│   │   ├── model.rs              # Model bindings
-│   │   ├── datasource.rs         # Datasource bindings
-│   │   ├── memory.rs             # Memory bindings
-│   │   └── search.rs             # Search bindings
-│   ├── pyproject.toml            # Python package config
-│   └── Cargo.toml
-│
-├── graphnight-server/            # Standalone server binary
-│   ├── src/
-│   │   ├── main.rs               # Entry point
-│   │   ├── config.rs             # Configuration
-│   │   ├── graphql_server.rs     # Tide + async-graphql
-│   │   ├── rest_server.rs        # Axum REST API
-│   │   ├── mcp_server.rs         # MCP protocol server
-│   │   └── flight_sql_server.rs  # Arrow Flight SQL
-│   └── Cargo.toml
-│
-└── graphnight-cli/               # CLI tool
-    ├── src/
-    │   ├── main.rs
-    │   ├── commands/
-    │   │   ├── query.rs
-    │   │   ├── model.rs
-    │   │   ├── datasource.rs
-    │   │   ├── memory.rs
-    │   │   └── search.rs
-    │   └── output.rs             # Table, JSON, CSV formatters
-    └── Cargo.toml
-```
+
+Vision-only modules (not all present as separate files yet): query planner/optimizer,
+DataFusion engine, Redis/result cache, axum REST, MCP, Flight SQL, importers.
+See [LAUNCH.md](LAUNCH.md) for what is actually gated for release.
 
 ## Data Models
 

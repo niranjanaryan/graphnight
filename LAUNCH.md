@@ -23,8 +23,9 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 - [ ] Push local `main` to `origin/main`
 - [ ] Tag `v0.1.0-alpha` after push
 - [ ] GitHub description, topics (`semantic-layer`, `graphql`, `rust`), homepage
-- [ ] Remove or clearly archive empty `api/` placeholder
+- [x] Empty `api/` / placeholder dirs removed; workspace at repo root (`crates/`)
 - [x] Root `pyproject.toml` is a non-publishable workspace marker (Python = experimental)
+- [x] `CONTRIBUTING.md` + `SECURITY.md`
 
 ### Product honesty
 

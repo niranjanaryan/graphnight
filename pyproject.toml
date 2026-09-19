@@ -1,5 +1,5 @@
 # Root Python packaging is intentionally not published.
-# Experimental PyO3 bindings live in rust-engine/graphnight-python/.
+# Experimental PyO3 bindings live in crates/graphnight-python/.
 # This file exists only so tooling that looks for a root pyproject does not
 # assume a FastAPI app. Prefer the Rust CLI/server for the OSS alpha.
 
