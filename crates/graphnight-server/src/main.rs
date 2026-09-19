@@ -1,6 +1,8 @@
 mod auth_config;
 mod cors_config;
 mod oidc;
+mod rate_limit;
+mod request_id;
 
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
@@ -8,6 +10,7 @@ use auth_config::{extract_api_key, extract_tenant, AuthConfig};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
+    middleware,
     response::{Html, IntoResponse},
     routing::{get, get_service},
     Json, Router,
@@ -24,6 +27,9 @@ use graphnight_sql::{
     SqlEngine,
 };
 use graphnight_storage::{PostgresMetadataStorage, StorageBackend, YamlStorage};
+use rate_limit::{rate_limit_middleware, RateLimitState};
+use request_id::{make_trace_span, request_id_middleware};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn, Level};
@@ -118,7 +124,10 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let log_level = args.log_level.parse::<Level>().unwrap_or(Level::INFO);
-    let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(log_level)
+        .with_target(true)
+        .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     info!("Starting GraphNight server...");
@@ -229,7 +238,10 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let schema_for_ws = state.schema.clone();
+    let rate_limit = RateLimitState::from_env();
 
+    // Layer order (outermost last): CORS → rate limit → request-id → TraceLayer → routes.
+    // Request-id runs before TraceLayer so spans include `request_id`.
     let app = Router::new()
         .route("/graphql", get(graphiql).post(graphql_handler))
         .route(
@@ -238,7 +250,16 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/health", get(health))
         .route("/metrics", get(metrics))
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|req: &axum::extract::Request| {
+                make_trace_span(req)
+            }),
+        )
+        .layer(middleware::from_fn(request_id_middleware))
+        .layer(middleware::from_fn_with_state(
+            rate_limit,
+            rate_limit_middleware,
+        ))
         .layer(cors_layer_from_env())
         .with_state(state);
 
@@ -251,7 +272,11 @@ async fn main() -> anyhow::Result<()> {
         "TLS: terminate at a reverse proxy (nginx/Caddy/Traefik). \
          In-process TLS is not implemented yet."
     );
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

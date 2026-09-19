@@ -70,7 +70,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 - [x] Secret references: `env:VARNAME` resolution + `GRAPHNIGHT_REQUIRE_SECRET_REFS` (vault not yet)
 - [x] CORS configurable via `GRAPHNIGHT_CORS_ORIGINS` (default localhost-only; `*` warns)
 - [x] TLS documented: terminate at reverse proxy; in-process TLS not implemented
-- [ ] Rate limiting that actually enforces quotas
+- [x] Rate limiting that actually enforces quotas (`GRAPHNIGHT_RATE_LIMIT_RPS` in-process token bucket; not multi-node)
 - [ ] Parameterized / safely bound SQL values; SQL injection review
 - [x] Durable audit log (JSONL via `GRAPHNIGHT_AUDIT_LOG`, default `./graphnight_data/audit.jsonl`)
 
@@ -79,12 +79,12 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 - [x] Deep `/health` (storage + DB pool checks)
 - [ ] Prometheus `/metrics` (QPS, latency, errors, pool usage)
 - [ ] OpenTelemetry traces for plan → SQL → execute
-- [ ] Structured logging with request IDs
+- [x] Structured logging with request IDs (`x-request-id` + tracing span field; not full JSON log shipper)
 - [x] Dockerfile + compose (and optionally Helm)
 - [ ] Config via env; no secrets in git
 - [ ] Backup / restore for metadata storage
-- [ ] Runbook: deploy, rollback, rotate credentials, incident response
-- [ ] SBOM + dependency vulnerability scanning in CI
+- [x] Runbook: deploy, rollback, rotate credentials, incident response (`docs/runbook.md`)
+- [x] SBOM + dependency vulnerability scanning in CI (SPDX artifact + `cargo audit` warn-only)
 
 ### B3. Reliability & performance
 

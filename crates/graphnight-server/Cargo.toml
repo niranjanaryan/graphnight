@@ -17,6 +17,7 @@ graphnight-graphql = { path = "../graphnight-graphql" }
 async-graphql = { workspace = true }
 async-graphql-axum = { workspace = true }
 axum = { workspace = true }
+tower = { version = "0.5", features = ["util"] }
 tower-http = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

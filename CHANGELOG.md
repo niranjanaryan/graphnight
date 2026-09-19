@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Request IDs: middleware generates or propagates `x-request-id`, echoes it on responses, and records `request_id` on HTTP tracing spans
+- In-process rate limiting via `GRAPHNIGHT_RATE_LIMIT_RPS` (per API key or client IP; `0`/unset disables; `429` + `Retry-After`; `/health` and `/metrics` exempt)
+- Ops runbook: `docs/runbook.md` (deploy, rollback, key/OIDC rotation, audit log, health/metrics, incidents)
+- CI job **SBOM / vulnerability scan**: `cargo audit` (`continue-on-error`) + Anchore SPDX SBOM artifact
+
+### Changed
+
+- `.env.example` documents audit log, rate limit, auth/OIDC/CORS, metadata URL, and secret-ref vars
+
 ## [1.0.0] - 2026-09-20
 
 First stable release. API keys + OIDC JWT, PolicyEnforcer on the live path, caches, Docker, HA Postgres metadata, and multi-platform PyPI wheels.

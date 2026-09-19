@@ -63,7 +63,9 @@ fn allowlist_layer(origins: Vec<HeaderValue>) -> CorsLayer {
             header::ACCEPT,
             HeaderName::from_static("x-api-key"),
             HeaderName::from_static("x-tenant-id"),
+            HeaderName::from_static("x-request-id"),
         ])
+        .expose_headers([HeaderName::from_static("x-request-id")])
 }
 
 fn parse_origin_list(raw: &str) -> Vec<HeaderValue> {

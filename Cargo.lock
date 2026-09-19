@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1795,7 +1795,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1815,7 +1815,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-e2e"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "graphnight-core",
@@ -1831,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-graphql"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1853,7 +1853,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-python"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-server"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1892,6 +1892,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "toml",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -1900,7 +1901,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-sql"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -1928,7 +1929,7 @@ dependencies = [
 
 [[package]]
 name = "graphnight-storage"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
