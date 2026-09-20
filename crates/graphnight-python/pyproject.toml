@@ -34,6 +34,7 @@ Repository = "https://github.com/niranjanaryan/graphnight"
 Changelog = "https://github.com/niranjanaryan/graphnight/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/niranjanaryan/graphnight/tree/main/docs"
 Issues = "https://github.com/niranjanaryan/graphnight/issues"
+Funding = "https://github.com/sponsors/niranjanaryan"
 
 [project.optional-dependencies]
 pandas = ["pandas>=2.2.0"]

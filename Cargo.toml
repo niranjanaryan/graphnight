@@ -18,6 +18,16 @@ edition = "2021"
 license = "Apache-2.0"
 authors = ["GraphNight Team"]
 repository = "https://github.com/niranjanaryan/graphnight"
+documentation = "https://github.com/niranjanaryan/graphnight/tree/main/docs"
+homepage = "https://github.com/niranjanaryan/graphnight"
+categories = ["database", "analytics", "graphql", "semantic-layer", "rust"]
+keywords = ["semantic-layer", "graphql", "sql", "analytics", "rust", "bi"]
+readme = "README.md"
+funding = [
+    { github = "niranjanaryan" },
+    { patreon = "niranjanaryan" },
+    { open_collective = "graphnight" },
+]
 
 [workspace.dependencies]
 # Core data processing - use custom SQL generator, avoid datafusion/parquet issues
