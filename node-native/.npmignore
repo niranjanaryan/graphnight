@@ -1,0 +1,12 @@
+# Files to ignore when publishing to npm
+node_modules/
+*.log
+*.tsbuildinfo
+.DS_Store
+tests/
+*.d.ts.map
+!index.js
+!index.d.ts
+!README.md
+!package.json
+!graphnight.*.node

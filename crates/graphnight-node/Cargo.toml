@@ -1,0 +1,49 @@
+[package]
+name = "graphnight-node"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+description = "Native Node.js bindings for GraphNight semantic layer"
+repository = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+categories = ["database", "analytics", "graphql", "semantic-layer", "rust", "napi"]
+keywords = ["semantic-layer", "graphql", "sql", "analytics", "rust", "napi", "nodejs"]
+
+[lib]
+name = "graphnight_node"
+crate-type = ["cdylib"]
+
+[dependencies]
+graphnight-core = { path = "../graphnight-core" }
+graphnight-sql = { path = "../graphnight-sql" }
+graphnight-storage = { path = "../graphnight-storage" }
+napi = { version = "2", features = ["napi8"] }
+napi-derive = "2"
+tokio = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+
+[package.metadata.napi]
+name = "graphnight"
+version = "1.0.0"
+triples = {}
+platforms = [
+    "x64-linux",
+    "x64-macos",
+    "arm64-macos",
+    "x64-windows",
+    "arm64-linux",
+    "x64-freebsd",
+]

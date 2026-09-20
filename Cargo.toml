@@ -6,6 +6,7 @@ members = [
     "crates/graphnight-storage",
     "crates/graphnight-graphql",
     "crates/graphnight-python",
+    "crates/graphnight-node",
     "crates/graphnight-server",
     "crates/graphnight-cli",
     "tests/e2e",

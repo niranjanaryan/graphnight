@@ -1,0 +1,52 @@
+{
+  "name": "@graphnight/native",
+  "version": "1.0.0",
+  "description": "Native Node.js bindings for GraphNight semantic layer - zero-copy Rust engine access via NAPI",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "npm run build",
+    "test": "node --test tests/*.test.js",
+    "test:watch": "node --test --watch tests/*.test.js"
+  },
+  "keywords": [
+    "graphnight",
+    "semantic-layer",
+    "graphql",
+    "analytics",
+    "sql",
+    "metrics",
+    "napi",
+    "native",
+    "rust"
+  ],
+  "author": "GraphNight Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/niranjanaryan/graphnight.git",
+    "directory": "crates/graphnight-node"
+  },
+  "bugs": {
+    "url": "https://github.com/niranjanaryan/graphnight/issues"
+  },
+  "homepage": "https://github.com/niranjanaryan/graphnight/tree/main/crates/graphnight-node#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "napi": {
+    "name": "graphnight",
+    "triples": {}
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "@types/node": "^20.10.0"
+  }
+}
