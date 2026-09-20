@@ -12,7 +12,6 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 | [usage-graphql.md](usage-graphql.md) | curl, `dryRun`, auth headers, GraphiQL |
 | [usage-python.md](usage-python.md) | `pip install graphnight` and client examples |
 | [usage-elixir.md](usage-elixir.md) | Elixir bindings, Phoenix integration, Oban jobs, Ecto |
-| [usage-node.md](usage-node.md) | `npm install @graphnight/sdk` — HTTP GraphQL client |
 | [usage-native.md](usage-native.md) | `npm install @graphnight/native` — Native Rust bindings |
 | [auth.md](auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant header, `DEV_OPEN` |
 | [deploy.md](deploy.md) | Docker, compose HA profile, reverse-proxy TLS, env cheat sheet |
@@ -23,8 +22,7 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 |----------|---------|---------|------|
 | **Python** | `graphnight` | `pip install graphnight` | [PyPI](https://pypi.org/project/graphnight/) • [Source](../crates/graphnight-python) |
 | **Elixir** | `graphnight` | `mix deps.get` (from Git) | [Hex.pm](https://hex.pm/packages/graphnight) • [Source](https://github.com/niranjanaryan/graphnight-elixir) |
-| **Node.js (HTTP)** | `@graphnight/sdk` | `npm install @graphnight/sdk` | [npm](https://www.npmjs.com/package/@graphnight/sdk) • [Source](../node-sdk) |
-| **Node.js (Native)** | `@graphnight/native` | `npm install @graphnight/native` | [npm](https://www.npmjs.com/package/@graphnight/native) • [Source](../node-native) |
+| **Node.js** | `@graphnight/native` | `npm install @graphnight/native` | [npm](https://www.npmjs.com/package/@graphnight/native) • [Source](../crates/graphnight-node) |
 | **Rust** | `graphnight-*` crates | `cargo add graphnight-core` | [crates.io](https://crates.io/search?q=graphnight) • [Source](../crates) |
 
 ## Examples in-repo
@@ -36,7 +34,6 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 | [`examples/data/`](../examples/data/) | Sample `models.yaml` / `datasources.yaml` |
 | [`examples/query.json`](../examples/query.json) | CLI query payload |
 | [`examples/query.graphql`](../examples/query.graphql) | GraphQL dry-run + list models |
-| [`node-sdk/`](../node-sdk/) | Node.js HTTP SDK source & tests |
 | [`node-native/`](../node-native/) | Node.js native SDK source & tests |
 
 ## Related root docs

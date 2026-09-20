@@ -4,7 +4,7 @@
 
 GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
 
-> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Elixir (Hex.pm)](https://hex.pm/packages/graphnight) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/sdk) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/sdk)
+> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Elixir (Hex.pm)](https://hex.pm/packages/graphnight) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/native)
 
 See [LAUNCH.md](LAUNCH.md) for the full checklist. Remaining gaps (vault secret managers, some observability polish) are documented under Security notes in [CHANGELOG.md](CHANGELOG.md).
 
@@ -121,7 +121,6 @@ EOF
 | `examples/graphql/` | GraphQL ops + curl one-liners |
 | `examples/auth/` | API key / OIDC curls + policy notes |
 | `examples/ha/` | Compose `--profile ha` notes |
-| [`node-sdk/`](node-sdk/) | Node.js HTTP SDK source & tests |
 | [`node-native/`](node-native/) | Node.js native SDK source & tests |
 
 ## Repository layout
@@ -198,8 +197,7 @@ Runnable scripts: [`examples/python/`](examples/python/).
 |----------|---------|---------|
 | **Python** | [PyPI: graphnight](https://pypi.org/project/graphnight/) | `pip install graphnight` |
 | **Elixir** | [Hex.pm: graphnight](https://hex.pm/packages/graphnight) | `{:graphnight, "~> 1.0"}` in `mix.exs` |
-| **Node.js (HTTP)** | [npm: @graphnight/sdk](https://www.npmjs.com/package/@graphnight/sdk) | `npm install @graphnight/sdk` |
-| **Node.js (Native)** | [npm: @graphnight/native](https://www.npmjs.com/package/@graphnight/native) | `npm install @graphnight/native` |
+| **Node.js** | [npm: @graphnight/native](https://www.npmjs.com/package/@graphnight/native) | `npm install @graphnight/native` |
 | **Rust** | Workspace crates | `cargo add graphnight-core` |
 ### Elixir Bindings
 
@@ -211,27 +209,6 @@ Native Rustler NIF bindings providing zero-copy access to the GraphNight engine:
 ```
 
 See [graphnight-elixir](https://github.com/niranjanaryan/graphnight-elixir) for full documentation.
-
-### Node.js HTTP SDK (@graphnight/sdk)
-
-TypeScript client for GraphNight GraphQL API with full type safety:
-
-```typescript
-import { createClient } from '@graphnight/sdk';
-
-const client = createClient({
-  url: 'http://localhost:8080/graphql',
-  headers: { Authorization: 'Bearer <token>' },
-});
-
-const result = await client.query({
-  name: 'orders',
-  measures: [{ formula: { expression: 'amount_usd', label: 'Revenue' }, aggregation: 'sum' }],
-  dimensions: [{ name: 'status' }],
-});
-```
-
-See [node-sdk](../node-sdk) for source and [docs/usage-node.md](docs/usage-node.md) for full documentation.
 
 ### Node.js Native SDK (@graphnight/native)
 
@@ -251,7 +228,7 @@ const result = await client.query({
 const rows = JSON.parse(result.data);
 ```
 
-See [node-native](../node-native) for source and [docs/usage-native.md](docs/usage-native.md) for full documentation.
+See [crates/graphnight-node](../crates/graphnight-node) for source and [docs/usage-native.md](docs/usage-native.md) for full documentation.
 
 ## Development
 
