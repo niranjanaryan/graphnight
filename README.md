@@ -121,6 +121,7 @@ EOF
 | `examples/graphql/` | GraphQL ops + curl one-liners |
 | `examples/auth/` | API key / OIDC curls + policy notes |
 | `examples/ha/` | Compose `--profile ha` notes |
+| [`node-client/`](node-client/) | Node.js HTTP client source & tests |
 | [`node-native/`](node-native/) | Node.js native SDK source & tests |
 
 ## Repository layout
@@ -197,7 +198,8 @@ Runnable scripts: [`examples/python/`](examples/python/).
 |----------|---------|---------|
 | **Python** | [PyPI: graphnight](https://pypi.org/project/graphnight/) | `pip install graphnight` |
 | **Elixir** | [Hex.pm: graphnight](https://hex.pm/packages/graphnight) | `{:graphnight, "~> 1.0"}` in `mix.exs` |
-| **Node.js** | [npm: @graphnight/native](https://www.npmjs.com/package/@graphnight/native) | `npm install @graphnight/native` |
+| **Node.js (Native)** | [npm: @graphnight/native](https://www.npmjs.com/package/@graphnight/native) | `npm install @graphnight/native` |
+| **Node.js (HTTP)** | [npm: @graphnight/client](https://www.npmjs.com/package/@graphnight/client) | `npm install @graphnight/client` |
 | **Rust** | Workspace crates | `cargo add graphnight-core` |
 ### Elixir Bindings
 
@@ -229,6 +231,27 @@ const rows = JSON.parse(result.data);
 ```
 
 See [crates/graphnight-node](../crates/graphnight-node) for source and [docs/usage-native.md](docs/usage-native.md) for full documentation.
+
+### Node.js HTTP Client (@graphnight/client)
+
+TypeScript client for GraphNight GraphQL API — connects to a remote server:
+
+```typescript
+import { createClient } from '@graphnight/client';
+
+const client = createClient({
+  url: 'http://localhost:8080/graphql',
+  headers: { Authorization: 'Bearer <token>' },
+});
+
+const result = await client.query({
+  name: 'orders',
+  measures: [{ formula: { expression: 'amount_usd', label: 'Revenue' }, aggregation: 'sum' }],
+  dimensions: [{ name: 'status' }],
+});
+```
+
+See [node-client](../node-client) for source and [docs/usage-client.md](docs/usage-client.md) for full documentation.
 
 ## Development
 

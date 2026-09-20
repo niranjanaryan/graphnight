@@ -1,0 +1,60 @@
+{
+  "name": "@graphnight/client",
+  "version": "1.0.0",
+  "description": "GraphNight HTTP/GraphQL client for Node.js - TypeScript client for GraphNight semantic layer",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build && npm test",
+    "docs": "typedoc --out docs src"
+  },
+  "keywords": [
+    "graphnight",
+    "semantic-layer",
+    "graphql",
+    "analytics",
+    "sql",
+    "metrics"
+  ],
+  "author": "GraphNight Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/niranjanaryan/graphnight.git",
+    "directory": "node-client"
+  },
+  "bugs": {
+    "url": "https://github.com/niranjanaryan/graphnight/issues"
+  },
+  "homepage": "https://github.com/niranjanaryan/graphnight/tree/main/node-client#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "graphql": "^16.8.1",
+    "graphql-request": "^6.1.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typedoc": "^0.25.7",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "graphql": "^16.8.1"
+  }
+}

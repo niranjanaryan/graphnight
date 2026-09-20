@@ -13,6 +13,7 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 | [usage-python.md](usage-python.md) | `pip install graphnight` and client examples |
 | [usage-elixir.md](usage-elixir.md) | Elixir bindings, Phoenix integration, Oban jobs, Ecto |
 | [usage-native.md](usage-native.md) | `npm install @graphnight/native` — Native Rust bindings |
+| [usage-client.md](usage-client.md) | `npm install @graphnight/client` — HTTP GraphQL client |
 | [auth.md](auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant header, `DEV_OPEN` |
 | [deploy.md](deploy.md) | Docker, compose HA profile, reverse-proxy TLS, env cheat sheet |
 
@@ -22,7 +23,8 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 |----------|---------|---------|------|
 | **Python** | `graphnight` | `pip install graphnight` | [PyPI](https://pypi.org/project/graphnight/) • [Source](../crates/graphnight-python) |
 | **Elixir** | `graphnight` | `mix deps.get` (from Git) | [Hex.pm](https://hex.pm/packages/graphnight) • [Source](https://github.com/niranjanaryan/graphnight-elixir) |
-| **Node.js** | `@graphnight/native` | `npm install @graphnight/native` | [npm](https://www.npmjs.com/package/@graphnight/native) • [Source](../crates/graphnight-node) |
+| **Node.js (Native)** | `@graphnight/native` | `npm install @graphnight/native` | [npm](https://www.npmjs.com/package/@graphnight/native) • [Source](../crates/graphnight-node) |
+| **Node.js (HTTP)** | `@graphnight/client` | `npm install @graphnight/client` | [npm](https://www.npmjs.com/package/@graphnight/client) • [Source](../node-client) |
 | **Rust** | `graphnight-*` crates | `cargo add graphnight-core` | [crates.io](https://crates.io/search?q=graphnight) • [Source](../crates) |
 
 ## Examples in-repo
@@ -34,6 +36,7 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 | [`examples/data/`](../examples/data/) | Sample `models.yaml` / `datasources.yaml` |
 | [`examples/query.json`](../examples/query.json) | CLI query payload |
 | [`examples/query.graphql`](../examples/query.graphql) | GraphQL dry-run + list models |
+| [`node-client/`](../node-client/) | Node.js HTTP client source & tests |
 | [`node-native/`](../node-native/) | Node.js native SDK source & tests |
 
 ## Related root docs
