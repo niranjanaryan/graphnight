@@ -4,6 +4,8 @@
 
 GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
 
+> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Elixir (Hex.pm)](https://hex.pm/packages/graphnight)
+
 See [LAUNCH.md](LAUNCH.md) for the full checklist. Remaining gaps (vault secret managers, some observability polish) are documented under Security notes in [CHANGELOG.md](CHANGELOG.md).
 
 ## Features (today)
@@ -186,6 +188,24 @@ cd crates/graphnight-python && maturin develop && pytest
 ```
 
 Runnable scripts: [`examples/python/`](examples/python/).
+
+## Language Bindings
+
+| Language | Package | Install |
+|----------|---------|---------|
+| **Python** | [PyPI: graphnight](https://pypi.org/project/graphnight/) | `pip install graphnight` |
+| **Elixir** | [Hex.pm: graphnight](https://hex.pm/packages/graphnight) | `{:graphnight, "~> 1.0"}` in `mix.exs` |
+| **Rust** | Workspace crates | `cargo add graphnight-core` |
+
+### Elixir Bindings
+Native Rustler NIF bindings providing zero-copy access to the GraphNight engine:
+
+```elixir
+{:ok, engine} = GraphNight.Client.init("./graphnight_data")
+{:ok, result} = GraphNight.Client.execute_query(engine, query)
+```
+
+See [graphnight-elixir](https://github.com/niranjanaryan/graphnight-elixir) for full documentation.
 
 ## Development
 
