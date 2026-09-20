@@ -11,6 +11,7 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 | [usage-cli.md](usage-cli.md) | `init`, `model list`, dry-run, search, `serve` tip |
 | [usage-graphql.md](usage-graphql.md) | curl, `dryRun`, auth headers, GraphiQL |
 | [usage-python.md](usage-python.md) | `pip install graphnight` and client examples |
+| [usage-elixir.md](usage-elixir.md) | Elixir bindings, Phoenix integration, Oban jobs |
 | [auth.md](auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant header, `DEV_OPEN` |
 | [deploy.md](deploy.md) | Docker, compose HA profile, reverse-proxy TLS, env cheat sheet |
 
@@ -38,9 +39,9 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 |---------|----------------|
 | Vault / cloud secret managers | Not integrated — use `env:VARNAME` refs |
 | MCP / REST agent APIs | Not implemented (see ARCHITECTURE) |
-| `multiStageQuery` DAG | Errors — not implemented |
-| `ingestModels` (DB introspection) | Errors — use YAML / `createModel` |
-| Column masks on responses | Types exist; not applied end-to-end |
-| Query timeout end-to-end | Policy field exists; full enforcement incomplete |
+| `multiStageQuery` DAG | Implemented — topological sort + cycle detection |
+| `ingestModels` (DB introspection) | Implemented — PostgreSQL, MySQL, SQLite |
+| Column masks on responses | Implemented — `SessionPolicy.column_masks` |
+| Query timeout end-to-end | Implemented — `SessionPolicy.query_timeout_secs` |
 | In-process TLS | Not implemented — terminate at a reverse proxy |
 | OIDC browser login UI | JWT bearer validation only |
