@@ -8,7 +8,6 @@ members = [
     "crates/graphnight-python",
     "crates/graphnight-server",
     "crates/graphnight-cli",
-    "crates/graphnight-elixir",
     "tests/e2e",
 ]
 exclude = []
