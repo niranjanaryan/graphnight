@@ -3,6 +3,7 @@ mod cors_config;
 mod oidc;
 mod rate_limit;
 mod request_id;
+mod rest;
 
 use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
@@ -250,6 +251,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/health", get(health))
         .route("/metrics", get(metrics))
+        .route("/api/v1/models", get(rest::rest_list_models))
+        .route("/api/v1/models/:name", get(rest::rest_get_model))
+        .route("/api/v1/datasources", get(rest::rest_list_datasources))
+        .route("/api/v1/query", axum::routing::post(rest::rest_query))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &axum::extract::Request| make_trace_span(req)),

@@ -53,7 +53,15 @@ impl QueryRoot {
             .await?
             .ok_or_else(|| Error::new(format!("Model not found: {}", model_name)))?;
 
+        let gql_ctx = ctx.data::<GraphQLContext>().ok();
+        let policy = gql_ctx.and_then(|g| g.session_policy.as_ref().cloned());
+
         enforce_policy(ctx, &mut query, &model_name, &model.datasource)?;
+
+        let query_timeout = policy
+            .as_ref()
+            .and_then(|p| p.query_timeout_secs)
+            .unwrap_or(300);
 
         if dry_run.unwrap_or(false) {
             let sql = self.sql_engine.generate_sql(&query)?;
@@ -75,7 +83,14 @@ impl QueryRoot {
             .ok_or_else(|| Error::new(format!("Datasource not found: {}", model.datasource)))?;
 
         let sql = self.sql_engine.generate_sql(&query)?;
-        let results = self.sql_engine.execute_sqlx(&datasource, &sql).await?;
+
+        let execute_future = self.sql_engine.execute_sqlx(&datasource, &sql);
+        let results = tokio::time::timeout(
+            std::time::Duration::from_secs(query_timeout),
+            execute_future,
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Query timeout exceeded ({}s)", query_timeout))??;
 
         let columns = if !results.is_empty() {
             results[0].keys().cloned().collect()
@@ -84,10 +99,26 @@ impl QueryRoot {
         };
         let row_count = results.len();
 
-        let data: Vec<JsonValue> = results
+        let mut data: Vec<JsonValue> = results
             .into_iter()
             .map(|m| serde_json::to_value(m).unwrap())
             .collect();
+
+        // Apply column masks from policy
+        if let Some(policy) = gql_ctx.and_then(|g| g.session_policy.as_ref()) {
+            if !policy.column_masks.is_empty() {
+                for row in &mut data {
+                    if let JsonValue::Object(map) = row {
+                        for (col, mask_fn) in &policy.column_masks {
+                            if let Some(JsonValue::String(val)) = map.get(col) {
+                                let masked = mask_fn(val);
+                                map.insert(col.clone(), JsonValue::String(masked));
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         info!(
             model = %model_name,
@@ -198,7 +229,15 @@ impl QueryRoot {
             });
         }
 
-        let executor = MultiStageExecutor::new(self.sql_engine.clone(), self.storage.clone());
+        let gql_ctx = ctx.data::<GraphQLContext>().ok();
+
+        let executor = MultiStageExecutor::new(self.sql_engine.clone(), self.storage.clone())
+            .with_query_timeout(std::time::Duration::from_secs(
+                gql_ctx
+                    .and_then(|g| g.session_policy.as_ref())
+                    .and_then(|p| p.query_timeout_secs)
+                    .unwrap_or(300),
+            ));
         let stage_results = executor.execute_dag(stages).await.map_err(|e| Error::new(e.to_string()))?;
 
         let mut results = Vec::new();
@@ -209,11 +248,27 @@ impl QueryRoot {
                 vec![]
             };
 
-            let data: Vec<JsonValue> = stage_result
+            let mut data: Vec<JsonValue> = stage_result
                 .data
                 .into_iter()
                 .map(|m| serde_json::to_value(m).unwrap())
                 .collect();
+
+            // Apply column masks from policy
+            if let Some(policy) = gql_ctx.and_then(|g| g.session_policy.as_ref()) {
+                if !policy.column_masks.is_empty() {
+                    for row in &mut data {
+                        if let JsonValue::Object(map) = row {
+                            for (col, mask_fn) in &policy.column_masks {
+                                if let Some(JsonValue::String(val)) = map.get(col) {
+                                    let masked = mask_fn(val);
+                                    map.insert(col.clone(), JsonValue::String(masked));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             let sql = if is_dry_run {
                 Some(stage_result.sql)

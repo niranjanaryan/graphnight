@@ -64,25 +64,25 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
   - [x] forced filters
   - [x] RLS `row_filter`
   - [x] max rows
-  - [ ] query timeout enforced end-to-end
-  - [ ] column masks on response
+  - [x] query timeout enforced end-to-end
+  - [x] column masks on response
 - [x] Lock down datasource/model mutations (admin-only when auth required)
 - [x] Secret references: `env:VARNAME` resolution + `GRAPHNIGHT_REQUIRE_SECRET_REFS` (vault not yet)
 - [x] CORS configurable via `GRAPHNIGHT_CORS_ORIGINS` (default localhost-only; `*` warns)
 - [x] TLS documented: terminate at reverse proxy; in-process TLS not implemented
 - [x] Rate limiting that actually enforces quotas (`GRAPHNIGHT_RATE_LIMIT_RPS` in-process token bucket; not multi-node)
-- [ ] Parameterized / safely bound SQL values; SQL injection review
+- [x] Parameterized / safely bound SQL values; SQL injection review
 - [x] Durable audit log (JSONL via `GRAPHNIGHT_AUDIT_LOG`, default `./graphnight_data/audit.jsonl`)
 
 ### B2. Observability & ops
 
 - [x] Deep `/health` (storage + DB pool checks)
-- [ ] Prometheus `/metrics` (QPS, latency, errors, pool usage)
+- [x] Prometheus `/metrics` (QPS, latency, errors, pool usage)
 - [ ] OpenTelemetry traces for plan → SQL → execute
 - [x] Structured logging with request IDs (`x-request-id` + tracing span field; not full JSON log shipper)
 - [x] Dockerfile + compose (and optionally Helm)
 - [ ] Config via env; no secrets in git
-- [ ] Backup / restore for metadata storage
+- [x] Backup / restore for metadata storage
 - [x] Runbook: deploy, rollback, rotate credentials, incident response (`docs/runbook.md`)
 - [x] SBOM + dependency vulnerability scanning in CI (SPDX artifact + `cargo audit` warn-only)
 
@@ -101,7 +101,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 ### B4. Product surface (production-expected)
 
 - [ ] Stable versioned API + changelog
-- [ ] REST and/or MCP for agent integrations (as committed in blueprint)
+- [x] REST and/or MCP for agent integrations (as committed in blueprint)
 - [x] Python package with working tests (or explicitly unsupported)
 - [ ] Importers or migration guides (dbt / Cube) as needed by customers
 - [ ] Support channel + security contact (`SECURITY.md`)

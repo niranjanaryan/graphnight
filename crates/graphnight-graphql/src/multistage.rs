@@ -6,6 +6,7 @@ use graphnight_storage::StorageBackend;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
@@ -28,6 +29,7 @@ pub struct MultiStageExecutor {
     sql_engine: Arc<SqlEngine>,
     storage: Arc<dyn StorageBackend>,
     stage_results: Arc<RwLock<HashMap<String, StageResult>>>,
+    query_timeout: Duration,
 }
 
 impl MultiStageExecutor {
@@ -36,7 +38,13 @@ impl MultiStageExecutor {
             sql_engine,
             storage,
             stage_results: Arc::new(RwLock::new(HashMap::new())),
+            query_timeout: Duration::from_secs(300),
         }
+    }
+
+    pub fn with_query_timeout(mut self, timeout: Duration) -> Self {
+        self.query_timeout = timeout;
+        self
     }
 
     pub async fn execute_dag(
@@ -141,7 +149,11 @@ impl MultiStageExecutor {
             .ok_or_else(|| anyhow!("Datasource not found: {}", model.datasource))?;
 
         let sql = self.sql_engine.generate_sql(&query)?;
-        let data = self.sql_engine.execute_sqlx(&datasource, &sql).await?;
+
+        let execute_future = self.sql_engine.execute_sqlx(&datasource, &sql);
+        let data = tokio::time::timeout(self.query_timeout, execute_future)
+            .await
+            .map_err(|_| anyhow::anyhow!("Stage query timeout exceeded ({:?})", self.query_timeout))??;
         let columns = if !data.is_empty() {
             data[0].keys().cloned().collect()
         } else {

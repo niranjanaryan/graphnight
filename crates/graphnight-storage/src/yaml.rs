@@ -127,6 +127,84 @@ impl YamlStorage {
         tokio::fs::write(self.priority_path(), content).await?;
         Ok(())
     }
+
+    /// Backup all metadata to a JSON file
+    pub async fn backup(&self, path: &PathBuf) -> Result<(), StorageError> {
+        use crate::backend::StorageBackup;
+        use chrono::Utc;
+
+        let models = self.models.read().await;
+        let datasources = self.datasources.read().await;
+        let memories = self.memories.read().await;
+        let priority = self.priority.read().await;
+
+        let backup = StorageBackup {
+            version: "1".to_string(),
+            created_at: Utc::now(),
+            models: models.values().cloned().collect(),
+            datasources: datasources.values().cloned().collect(),
+            memories: memories.values().cloned().collect(),
+            datasource_priority: priority.clone(),
+        };
+
+        let content = serde_json::to_string_pretty(&backup)?;
+        tokio::fs::write(path, content).await?;
+        Ok(())
+    }
+
+    /// Restore metadata from a JSON file
+    pub async fn restore(&self, path: &PathBuf) -> Result<(), StorageError> {
+        use crate::backend::StorageBackup;
+
+        let content = tokio::fs::read_to_string(path).await?;
+        let backup: StorageBackup = serde_json::from_str(&content)?;
+
+        if backup.version != "1" {
+            return Err(StorageError::BackendError(format!(
+                "Unsupported backup version: {}",
+                backup.version
+            )));
+        }
+
+        // Restore models
+        {
+            let mut models = self.models.write().await;
+            models.clear();
+            for model in backup.models {
+                models.insert(model.name.clone(), model);
+            }
+            self.persist_models().await?;
+        }
+
+        // Restore datasources
+        {
+            let mut datasources = self.datasources.write().await;
+            datasources.clear();
+            for ds in backup.datasources {
+                datasources.insert(ds.name.clone(), ds);
+            }
+            self.persist_datasources().await?;
+        }
+
+        // Restore memories
+        {
+            let mut memories = self.memories.write().await;
+            memories.clear();
+            for memory in backup.memories {
+                memories.insert(memory.id.clone(), memory);
+            }
+            self.persist_memories().await?;
+        }
+
+        // Restore priority
+        {
+            let mut priority = self.priority.write().await;
+            *priority = backup.datasource_priority;
+            self.persist_priority().await?;
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -367,5 +445,13 @@ impl StorageBackend for YamlStorage {
         results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         results.truncate(limit);
         Ok(results)
+    }
+
+    async fn backup(&self, path: &PathBuf) -> Result<(), StorageError> {
+        self.backup(path).await
+    }
+
+    async fn restore(&self, path: &PathBuf) -> Result<(), StorageError> {
+        self.restore(path).await
     }
 }

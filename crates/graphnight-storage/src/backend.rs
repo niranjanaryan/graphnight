@@ -4,6 +4,18 @@ use graphnight_core::errors::StorageError;
 use graphnight_core::models::{DataSource, Model};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
+
+/// Backup data structure
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StorageBackup {
+    pub version: String,
+    pub created_at: DateTime<Utc>,
+    pub models: Vec<Model>,
+    pub datasources: Vec<DataSource>,
+    pub memories: Vec<Memory>,
+    pub datasource_priority: Vec<String>,
+}
 
 #[async_trait]
 pub trait StorageBackend: Send + Sync {
@@ -43,6 +55,22 @@ pub trait StorageBackend: Send + Sync {
     // Search index
     async fn index_model(&self, model: &Model) -> Result<(), StorageError>;
     async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>, StorageError>;
+
+    /// Backup all metadata to a JSON file
+    async fn backup(&self, path: &PathBuf) -> Result<(), StorageError> {
+        let _ = path;
+        Err(StorageError::BackendError(
+            "backup not implemented for this storage backend".to_string(),
+        ))
+    }
+
+    /// Restore metadata from a JSON file
+    async fn restore(&self, path: &PathBuf) -> Result<(), StorageError> {
+        let _ = path;
+        Err(StorageError::BackendError(
+            "restore not implemented for this storage backend".to_string(),
+        ))
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
