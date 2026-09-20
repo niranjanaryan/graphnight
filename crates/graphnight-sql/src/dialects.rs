@@ -411,7 +411,7 @@ impl Dialect for SqliteDialect {
             _ => "%Y-%m-%d",
         };
         if format.contains("quarter") {
-            format!("{}", format.replace("{}", column))
+            format.replace("{}", column).to_string()
         } else {
             format!("strftime('{}', {})", format, column)
         }

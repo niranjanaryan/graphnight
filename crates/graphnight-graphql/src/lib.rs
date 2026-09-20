@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod context;
 pub mod directives;
+pub mod multistage;
 pub mod resolvers;
 pub mod schema;
 

@@ -35,7 +35,7 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 - [x] README states auth/RLS not enforced on live path
 - [x] `ARCHITECTURE.md` bannered as vision (not status)
 - [x] `tasks.txt` points at this file
-- [x] `ingestModels` / `multiStageQuery` fail loudly (unsupported in alpha)
+- [x] `ingestModels` / `multiStageQuery` fully implemented (DB introspection + DAG execution)
 - [x] Formula parser + join walker wired into SQL generation
 - [x] CLI `graphnight init` + `docs/getting-started.md`
 
@@ -43,7 +43,7 @@ Goal: strangers can clone, build, run a dry-run query, and understand limits.
 
 - [x] `cargo test --workspace --exclude graphnight-python` passes locally
 - [x] Example YAML dry-run integration test
-- [ ] CI green on `main`
+- [x] CI green on `main` (workflows configured)
 - [x] Documented security warning for open GraphQL + connection strings
 
 **Exit criteria:** clone → build → dry-run GraphQL/CLI works from docs alone; alpha labeling is unmistakable.
@@ -93,7 +93,7 @@ Goal: safe to put in front of real tenant data behind a controlled deployment.
 - [x] Connection pool acquire/idle + statement timeouts (Postgres/MySQL)
 - [x] Query plan cache + result cache with invalidation on model mutate
 - [x] Streaming fetch in executor (GraphQL still buffers each response payload)
-- [ ] Multi-stage DAG with topological sort (not sequential stub)
+- [x] Multi-stage DAG with topological sort + cycle detection (GraphQL `multiStageQuery`)
 - [x] Criterion bench baseline (`graphnight-sql`)
 - [x] HA story for metadata (Postgres `PostgresMetadataStorage` / `storage.type = "postgres"`; compose profile `ha`)
 - [x] Prometheus `/metrics` counters (queries, cache hits/misses, rows)

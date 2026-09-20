@@ -2,13 +2,14 @@ use crate::auth::{
     enforce_policy, reject_if_auth_required, require_admin_if_auth, require_user_if_auth,
 };
 use crate::context::GraphQLContext;
+use crate::multistage::{MultiStageExecutor, StageInput};
 use crate::schema::JsonValue;
 use crate::schema::*;
 use async_graphql::*;
 use graphnight_core::models::{DataSource, Model, Query as CoreQuery};
 use graphnight_core::security::AuditEntry;
 use graphnight_core::validate_connection_string_input;
-use graphnight_sql::SqlEngine;
+use graphnight_sql::{IntrospectionConfig, SchemaIntrospector, SqlEngine, infer_model_from_table};
 use graphnight_storage::StorageBackend;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -156,17 +157,85 @@ impl QueryRoot {
 
     /// Execute multiple queries as a DAG.
     ///
-    /// Alpha: true DAG / `stage_ref` execution is not implemented. Fails loudly
-    /// so clients do not treat a sequential stub as supported.
+    /// Each query can reference a previous stage via `stage_ref` to filter
+    /// results based on prior stage output.
     async fn multi_stage_query(
         &self,
-        _ctx: &Context<'_>,
-        _inputs: Vec<QueryInput>,
-        _dry_run: Option<bool>,
+        ctx: &Context<'_>,
+        inputs: Vec<QueryInput>,
+        dry_run: Option<bool>,
     ) -> Result<MultiStageResponse> {
-        Err(Error::new(
-            "multiStageQuery is not supported in this alpha build (no DAG / stage_ref execution yet)",
-        ))
+        reject_if_auth_required(ctx)?;
+        let start = std::time::Instant::now();
+
+        let is_dry_run = dry_run.unwrap_or(false);
+
+        let mut stages = Vec::new();
+        let mut stage_names = std::collections::HashSet::new();
+
+        for (idx, input) in inputs.into_iter().enumerate() {
+            // Always auto-generate stage name; stage_ref is only for dependency
+            let stage_name = format!("stage_{}", idx + 1);
+
+            if !stage_names.insert(stage_name.clone()) {
+                return Err(Error::new(format!(
+                    "Duplicate stage name: {}",
+                    stage_name
+                )));
+            }
+
+            let query: CoreQuery = input.into();
+            let depends_on = query
+                .stage_ref
+                .as_ref()
+                .map(|s| vec![s.clone()])
+                .unwrap_or_default();
+
+            stages.push(StageInput {
+                query,
+                stage_name: stage_name.clone(),
+                depends_on,
+            });
+        }
+
+        let executor = MultiStageExecutor::new(self.sql_engine.clone(), self.storage.clone());
+        let stage_results = executor.execute_dag(stages).await.map_err(|e| Error::new(e.to_string()))?;
+
+        let mut results = Vec::new();
+        for stage_result in stage_results {
+            let columns = if !stage_result.data.is_empty() {
+                stage_result.data[0].keys().cloned().collect()
+            } else {
+                vec![]
+            };
+
+            let data: Vec<JsonValue> = stage_result
+                .data
+                .into_iter()
+                .map(|m| serde_json::to_value(m).unwrap())
+                .collect();
+
+            let sql = if is_dry_run {
+                Some(stage_result.sql)
+            } else {
+                None
+            };
+
+            results.push(QueryResponse {
+                data,
+                columns,
+                sql,
+                attributes: None,
+                population: None,
+                population_inferred: false,
+                execution_time_ms: start.elapsed().as_millis() as f64,
+            });
+        }
+
+        Ok(MultiStageResponse {
+            results,
+            execution_time_ms: start.elapsed().as_millis() as f64,
+        })
     }
 
     /// List all models
@@ -536,17 +605,62 @@ impl MutationRoot {
     }
 
     /// Ingest models from a datasource via warehouse introspection.
-    ///
-    /// Alpha: unsupported. Define models via YAML or `createModel`.
     async fn ingest_models(
         &self,
         ctx: &Context<'_>,
-        _datasource: String,
+        datasource: String,
     ) -> Result<IngestionReport> {
         require_admin_if_auth(ctx)?;
-        Err(Error::new(
-            "ingestModels is not supported in this alpha build; define models via YAML or createModel",
-        ))
+
+        let ds = self
+            .storage
+            .get_datasource(&datasource)
+            .await?
+            .ok_or_else(|| Error::new(format!("Datasource not found: {}", datasource)))?;
+
+        let executor = self.sql_engine.executor().clone();
+        let introspector = SchemaIntrospector::new(executor);
+
+        let tables = introspector
+            .introspect(&ds, IntrospectionConfig::default())
+            .await
+            .map_err(|e| Error::new(format!("Introspection failed: {}", e)))?;
+
+        let mut models_created = 0;
+        let mut models_updated = 0;
+        let mut errors = Vec::new();
+
+        for table in &tables {
+            let model = infer_model_from_table(table, &datasource, &tables);
+            let model_name = model.name.clone();
+            match self.storage.get_model(&model_name, None).await {
+                Ok(Some(_)) => {
+                    if let Err(e) = self.storage.update_model(&model_name, model).await {
+                        errors.push(format!("Failed to update model {}: {}", model_name, e));
+                    } else {
+                        models_updated += 1;
+                    }
+                }
+                Ok(None) => {
+                    if let Err(e) = self.storage.create_model(model).await {
+                        errors.push(format!("Failed to create model: {}", e));
+                    } else {
+                        models_created += 1;
+                    }
+                }
+                Err(e) => {
+                    errors.push(format!("Storage error: {}", e));
+                }
+            }
+        }
+
+        self.sql_engine.invalidate_result_cache();
+
+        Ok(IngestionReport {
+            models_created,
+            models_updated,
+            errors,
+        })
     }
 }
 

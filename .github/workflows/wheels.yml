@@ -1,165 +1,91 @@
-# Multi-platform wheels for crates/graphnight-python → PyPI
-name: Wheels
+name: Build Wheels
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
-    paths:
-      - "crates/graphnight-python/**"
-      - "crates/graphnight-core/**"
-      - "crates/graphnight-sql/**"
-      - "crates/graphnight-storage/**"
-      - "crates/graphnight-graphql/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/wheels.yml"
+    tags:
+      - 'v*'
   workflow_dispatch:
-    inputs:
-      publish:
-        description: "Publish built wheels to PyPI"
-        type: boolean
-        default: false
 
 permissions:
-  contents: read
+  contents: write
+  packages: write
 
 jobs:
-  linux:
-    runs-on: ubuntu-22.04
+  build-wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
-        target: [x86_64, aarch64]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install maturin
+        run: pip install maturin
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        working-directory: crates/graphnight-python
+        run: maturin build --release --strip --out dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
         with:
-          target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path crates/graphnight-python/Cargo.toml
-          sccache: "true"
-          manylinux: auto
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-linux-${{ matrix.target }}
-          path: dist
+          name: wheels-${{ matrix.os }}
+          path: crates/graphnight-python/dist/*.whl
 
-  musllinux:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [x86_64, aarch64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path crates/graphnight-python/Cargo.toml
-          sccache: "true"
-          manylinux: musllinux_1_2
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-musllinux-${{ matrix.target }}
-          path: dist
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: x64
-          args: --release --out dist --manifest-path crates/graphnight-python/Cargo.toml
-          sccache: "true"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-windows-x64
-          path: dist
-
-  macos:
-    # Build both archs on macos-14 (avoids scarce macos-13 Intel runners).
-    runs-on: macos-14
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [aarch64, x86_64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path crates/graphnight-python/Cargo.toml
-          sccache: "true"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-macos-${{ matrix.target }}
-          path: dist
-
-  sdist:
+  build-sdist:
+    name: Build sdist
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build sdist
-        uses: PyO3/maturin-action@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          command: sdist
-          args: --out dist --manifest-path crates/graphnight-python/Cargo.toml
-      - uses: actions/upload-artifact@v4
+          python-version: "3.11"
+      - name: Install maturin
+        run: pip install maturin
+      - name: Build sdist
+        working-directory: crates/graphnight-python
+        run: maturin sdist --out dist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
         with:
           name: wheels-sdist
-          path: dist
+          path: crates/graphnight-python/dist/*.tar.gz
 
-  release:
+  publish-pypi:
     name: Publish to PyPI
+    needs: [build-wheels, build-sdist]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [linux, musllinux, windows, macos, sdist]
-    if: >-
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish)
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
         with:
           pattern: wheels-*
+          path: dist/
           merge-multiple: true
-          path: dist
+      - name: Download sdist
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist/
       - name: List artifacts
-        run: ls -lah dist
+        run: ls -lah dist/
       - name: Attest
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: dist/*
       - name: Publish to PyPI
-        uses: PyO3/maturin-action@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --non-interactive --skip-existing dist/*
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          password: ${{ secrets.PYPI_API_TOKEN }}
       - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*

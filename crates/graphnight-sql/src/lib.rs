@@ -2,6 +2,7 @@ pub mod cache;
 pub mod dialects;
 pub mod executor;
 pub mod generator;
+pub mod introspection;
 pub mod metrics;
 
 use anyhow::Result;
@@ -57,6 +58,11 @@ impl SqlEngine {
     pub fn with_policy_fingerprint(mut self, fingerprint: impl Into<String>) -> Self {
         self.policy_fingerprint = fingerprint.into();
         self
+    }
+
+    /// Get a reference to the query executor for introspection
+    pub fn executor(&self) -> Arc<executor::QueryExecutor> {
+        self.executor.clone()
     }
 
     pub fn metrics(&self) -> Arc<QueryMetrics> {
@@ -130,3 +136,8 @@ impl SqlEngine {
         self.executor.execute_stream(ds, sql)
     }
 }
+
+pub use introspection::{
+    ForeignKeyInfo, IntrospectionConfig, SchemaIntrospector, TableInfo, infer_model_from_table,
+    ColumnInfo,
+};

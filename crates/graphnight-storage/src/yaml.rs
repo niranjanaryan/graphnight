@@ -335,7 +335,7 @@ impl StorageBackend for YamlStorage {
             if model
                 .description
                 .as_ref()
-                .map_or(false, |d| d.to_lowercase().contains(&q))
+                .is_some_and(|d| d.to_lowercase().contains(&q))
             {
                 matched.push("description".to_string());
                 score += 5.0;

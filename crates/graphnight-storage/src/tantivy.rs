@@ -162,7 +162,7 @@ impl TantivyStorage {
         let content_text = format!(
             "{} {} {} {} {}",
             model.name,
-            model.description.as_ref().map(|s| s.as_str()).unwrap_or(""),
+            model.description.as_deref().unwrap_or(""),
             measures_text,
             dimensions_text,
             time_dims_text

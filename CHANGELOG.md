@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Model Ingestion from DB Schema** (`ingestModels` mutation): Auto-generates semantic models (measures, dimensions, time_dimensions, joins) from PostgreSQL, MySQL, and SQLite databases via `information_schema` / `sqlite_master` introspection
+- **Multi-Stage DAG Queries** (`multiStageQuery` query): Execute multiple queries as a directed acyclic graph with topological sorting and cycle detection; stages can reference previous stage results via `stage_ref` for filter chaining
+- **Schema Introspection Module** (`graphnight-sql::introspection`): Public API for table/column/foreign key discovery and automatic model inference
+- GitHub Actions CI: Separate check (fmt/clippy), Linux/macOS test matrices with Postgres/MySQL services, binary build, security audit, SBOM generation
+- GitHub Actions Wheels: Cross-platform Python wheel builds (Linux/macOS/Windows) + PyPI publish on tag push
+- Dependabot config for automated dependency updates (Cargo, GitHub Actions, pip)
+
+### Changed
+- `multiStageQuery` moved from Mutation to Query (read-only DAG execution)
+- `QueryInput` now includes optional `stage_ref` field for multi-stage query dependencies
+- Improved clippy cleanliness across workspace (fixed `option_as_deref`, `unnecessary_map_or`, `unwrap_or_default`)
+
 ## [1.0.1] - 2026-09-20
 
 Production polish: docs/examples, Python client tests, request IDs, rate limiting, runbook, SBOM CI.

@@ -341,6 +341,7 @@ fn test_query_input_conversion() {
         offset: Some(0),
         whole_periods_only: Some(true),
         distinct_dimension_values: Some(false),
+        stage_ref: None,
     };
 
     let query: graphnight_core::models::Query = input.into();

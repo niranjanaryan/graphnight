@@ -274,6 +274,8 @@ pub struct QueryInput {
     pub offset: Option<i32>,
     pub whole_periods_only: Option<bool>,
     pub distinct_dimension_values: Option<bool>,
+    /// Reference to a previous stage in a multi-stage query
+    pub stage_ref: Option<String>,
 }
 
 impl From<QueryInput> for CoreQuery {
@@ -315,7 +317,7 @@ impl From<QueryInput> for CoreQuery {
             offset: v.offset.map(|o| o as usize),
             whole_periods_only: v.whole_periods_only,
             distinct_dimension_values: v.distinct_dimension_values,
-            stage_ref: None,
+            stage_ref: v.stage_ref,
         }
     }
 }
