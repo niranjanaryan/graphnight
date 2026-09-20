@@ -1,0 +1,30 @@
+[package]
+name = "graphnight_elixir"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+description = "Elixir bindings for GraphNight semantic layer via Rustler"
+
+[lib]
+name = "graphnight_elixir"
+crate-type = ["cdylib"]
+
+[dependencies]
+graphnight-core = { path = "../graphnight-core" }
+graphnight-sql = { path = "../graphnight-sql" }
+graphnight-storage = { path = "../graphnight-storage" }
+rustler = { version = "0.29", features = ["default"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+anyhow = { workspace = true }
+uuid = { workspace = true, features = ["serde", "v4", "v7"] }
+chrono = { workspace = true, features = ["serde"] }
+once_cell = "1.19"
+
+[dev-dependencies]
+rustler = { version = "0.29", features = ["default"] }
+
+[features]
+default = []
