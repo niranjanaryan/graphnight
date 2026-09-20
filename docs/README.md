@@ -1,6 +1,6 @@
 # GraphNight docs
 
-Practical guides for GraphNight **1.0.0**. Start with getting started, then pick a surface (CLI, GraphQL, Python) or ops topic (auth, deploy).
+Practical guides for GraphNight **1.0.0**. Start with getting started, then pick a surface (CLI, GraphQL, Python, Elixir, Node.js) or ops topic (auth, deploy).
 
 ## Index
 
@@ -8,12 +8,22 @@ Practical guides for GraphNight **1.0.0**. Start with getting started, then pick
 |-----|----------|
 | [getting-started.md](getting-started.md) | Build or install, scaffold, dry-run, server, Docker, pip |
 | [concepts.md](concepts.md) | Models, measures, joins, auth modes, storage, caching |
-| [usage-cli.md](usage-cli.md) | `init`, `model list`, dry-run, search, `serve` tip |
+| [usage-cli.md](usage-cli.md) | `init`, `model list`, dry-run, search, multi-stage, `serve` tip |
 | [usage-graphql.md](usage-graphql.md) | curl, `dryRun`, auth headers, GraphiQL |
 | [usage-python.md](usage-python.md) | `pip install graphnight` and client examples |
-| [usage-elixir.md](usage-elixir.md) | Elixir bindings, Phoenix integration, Oban jobs |
+| [usage-elixir.md](usage-elixir.md) | Elixir bindings, Phoenix integration, Oban jobs, Ecto |
+| [usage-node.md](usage-node.md) | `npm install @graphnight/sdk` and TypeScript examples |
 | [auth.md](auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant header, `DEV_OPEN` |
 | [deploy.md](deploy.md) | Docker, compose HA profile, reverse-proxy TLS, env cheat sheet |
+
+## SDKs
+
+| Language | Package | Install | Repo |
+|----------|---------|---------|------|
+| **Python** | `graphnight` | `pip install graphnight` | [PyPI](https://pypi.org/project/graphnight/) • [Source](../crates/graphnight-python) |
+| **Elixir** | `graphnight` | `mix deps.get` (from Git) | [Hex.pm](https://hex.pm/packages/graphnight) • [Source](https://github.com/niranjanaryan/graphnight-elixir) |
+| **Node.js** | `@graphnight/sdk` | `npm install @graphnight/sdk` | [npm](https://www.npmjs.com/package/@graphnight/sdk) • [Source](../node-sdk) |
+| **Rust** | `graphnight-*` crates | `cargo add graphnight-core` | [crates.io](https://crates.io/search?q=graphnight) • [Source](../crates) |
 
 ## Examples in-repo
 

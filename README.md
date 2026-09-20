@@ -4,7 +4,7 @@
 
 GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
 
-> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Elixir (Hex.pm)](https://hex.pm/packages/graphnight)
+> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Elixir (Hex.pm)](https://hex.pm/packages/graphnight) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/sdk) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/sdk)
 
 See [LAUNCH.md](LAUNCH.md) for the full checklist. Remaining gaps (vault secret managers, some observability polish) are documented under Security notes in [CHANGELOG.md](CHANGELOG.md).
 
@@ -121,6 +121,7 @@ EOF
 | `examples/graphql/` | GraphQL ops + curl one-liners |
 | `examples/auth/` | API key / OIDC curls + policy notes |
 | `examples/ha/` | Compose `--profile ha` notes |
+| [`node-sdk/`](node-sdk/) | Node.js SDK source & tests |
 
 ## Repository layout
 
@@ -150,6 +151,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP,
 | [docs/usage-cli.md](docs/usage-cli.md) | CLI: init, model list, dry-run, serve tip |
 | [docs/usage-graphql.md](docs/usage-graphql.md) | curl, dryRun, auth headers, GraphiQL |
 | [docs/usage-python.md](docs/usage-python.md) | `pip install graphnight` + client examples |
+| [docs/usage-node.md](docs/usage-node.md) | `npm install @graphnight/sdk` + TypeScript examples |
 | [docs/auth.md](docs/auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant, `DEV_OPEN` |
 | [docs/deploy.md](docs/deploy.md) | Docker, compose HA, reverse-proxy TLS, env cheat sheet |
 
@@ -195,9 +197,10 @@ Runnable scripts: [`examples/python/`](examples/python/).
 |----------|---------|---------|
 | **Python** | [PyPI: graphnight](https://pypi.org/project/graphnight/) | `pip install graphnight` |
 | **Elixir** | [Hex.pm: graphnight](https://hex.pm/packages/graphnight) | `{:graphnight, "~> 1.0"}` in `mix.exs` |
+| **Node.js** | [npm: @graphnight/sdk](https://www.npmjs.com/package/@graphnight/sdk) | `npm install @graphnight/sdk` |
 | **Rust** | Workspace crates | `cargo add graphnight-core` |
-
 ### Elixir Bindings
+
 Native Rustler NIF bindings providing zero-copy access to the GraphNight engine:
 
 ```elixir
@@ -206,6 +209,27 @@ Native Rustler NIF bindings providing zero-copy access to the GraphNight engine:
 ```
 
 See [graphnight-elixir](https://github.com/niranjanaryan/graphnight-elixir) for full documentation.
+
+### Node.js SDK
+
+TypeScript client for GraphNight GraphQL API with full type safety:
+
+```typescript
+import { createClient } from '@graphnight/sdk';
+
+const client = createClient({
+  url: 'http://localhost:8080/graphql',
+  headers: { Authorization: 'Bearer <token>' },
+});
+
+const result = await client.query({
+  name: 'orders',
+  measures: [{ formula: { expression: 'amount_usd', label: 'Revenue' }, aggregation: 'sum' }],
+  dimensions: [{ name: 'status' }],
+});
+```
+
+See [node-sdk](../node-sdk) for source and [docs/usage-node.md](docs/usage-node.md) for full documentation.
 
 ## Development
 
