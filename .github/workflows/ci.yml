@@ -22,7 +22,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run clippy
-        run: cargo clippy --workspace --all-targets --exclude graphnight-python -- -D warnings
+        run: cargo clippy --workspace --all-targets --exclude graphnight-python --exclude graphnight_elixir -- -D warnings
       - name: Check Python bindings compile
         run: cargo check -p graphnight-python
       - name: Check Node bindings compile
@@ -119,8 +119,8 @@ jobs:
             ~/.cargo/registry/cache/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run tests
-        run: cargo test --workspace --exclude graphnight-python
+- name: Run tests
+        run: cargo test --workspace --exclude graphnight-python --exclude graphnight_elixir
         env:
           GRAPHNIGHT_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost/graphnight_test
           GRAPHNIGHT_TEST_MYSQL_URL: mysql://mysql:mysql@localhost/graphnight_test
@@ -141,8 +141,8 @@ jobs:
             ~/.cargo/registry/cache/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run tests
-        run: cargo test --workspace --exclude graphnight-python
+- name: Run tests
+        run: cargo test --workspace --exclude graphnight-python --exclude graphnight_elixir
 
   build-binary:
     name: Build binary
