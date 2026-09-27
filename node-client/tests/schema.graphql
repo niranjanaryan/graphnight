@@ -1,0 +1,509 @@
+"""
+Aggregation type enum for GraphQL
+"""
+enum AggregationType {
+	SUM
+	AVG
+	COUNT
+	MIN
+	MAX
+	COUNT_DISTINCT
+}
+
+"""
+Create datasource input
+"""
+input CreateDatasourceInput {
+	name: String!
+	driver: String!
+	connectionString: String!
+	description: String
+	poolSize: Int
+}
+
+"""
+Create model input
+"""
+input CreateModelInput {
+	name: String!
+	datasource: String!
+	description: String
+	measures: [MeasureInput!]!
+	dimensions: [DimensionInput!]!
+	timeDimensions: [TimeDimensionInput!]!
+	joins: [JoinInput!]
+}
+
+"""
+Datasource info output.
+
+`connection_string` is deliberately absent: it carries credentials and must
+never be returned over an API surface.
+"""
+type DatasourceInfo {
+	name: String!
+	driver: String!
+	description: String
+	models: [String!]!
+	poolSize: Int
+}
+
+"""
+Dimension info output
+"""
+type DimensionInfo {
+	name: String!
+	label: String
+}
+
+"""
+Dimension input
+"""
+input DimensionInput {
+	name: String!
+	label: String
+}
+
+"""
+Dry run response
+"""
+type DryRunResponse {
+	sql: String!
+	explained: Boolean!
+}
+
+"""
+Filter input
+"""
+input FilterInput {
+	field: String!
+	operator: FilterOperator!
+	value: JSON!
+	orCondition: Boolean
+}
+
+"""
+Filter operator enum for GraphQL
+"""
+enum FilterOperator {
+	EQ
+	NEQ
+	GT
+	GTE
+	LT
+	LTE
+	LIKE
+	I_LIKE
+	IN
+	NOT_IN
+	IS_NULL
+	IS_NOT_NULL
+	BETWEEN
+	NOT_BETWEEN
+}
+
+"""
+Forget memory response
+"""
+type ForgetMemoryResponse {
+	success: Boolean!
+	id: String!
+}
+
+"""
+Ingestion report
+"""
+type IngestionReport {
+	modelsCreated: Int!
+	modelsUpdated: Int!
+	errors: [String!]!
+}
+
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+"""
+A scalar that can represent any JSON Object value.
+"""
+scalar JSONObject
+
+"""
+Join condition input
+"""
+input JoinConditionInput {
+	left: String!
+	right: String!
+}
+
+"""
+Join info output — agents need this to reason about join paths
+"""
+type JoinInfo {
+	name: String!
+	model: String!
+	joinType: String!
+	on: [String!]!
+	alias: String
+}
+
+"""
+Join input
+"""
+input JoinInput {
+	name: String!
+	model: String!
+	joinType: JoinType!
+	on: [JoinConditionInput!]!
+	alias: String
+}
+
+"""
+Join type enum for GraphQL
+"""
+enum JoinType {
+	INNER
+	LEFT
+	RIGHT
+	FULL
+}
+
+"""
+Measure info output (rich form; `ModelInfo.measures` stays a flat string list)
+"""
+type MeasureInfo {
+	name: String!
+	expression: String!
+	aggregation: String!
+	label: String
+	format: String
+}
+
+"""
+Measure input
+"""
+input MeasureInput {
+	formula: String!
+	label: String
+	format: String
+	aggregation: AggregationType!
+}
+
+"""
+Memory output
+"""
+type Memory {
+	id: String!
+	learning: String!
+	linkedEntities: [String!]!
+	description: String
+	createdAt: String!
+	updatedAt: String!
+}
+
+"""
+Memory filter input
+"""
+input MemoryFilter {
+	query: String
+	entity: String
+	limit: Int
+	offset: Int
+}
+
+"""
+Model change event for subscriptions
+"""
+type ModelChangeEvent {
+	eventType: String!
+	modelName: String!
+	datasource: String!
+	timestamp: String!
+}
+
+"""
+Model info output
+"""
+type ModelInfo {
+	name: String!
+	datasource: String!
+	description: String
+	"""
+	Measure formula expressions (flat, back-compatible).
+	"""
+	measures: [String!]!
+	"""
+	Dimension names (flat, back-compatible).
+	"""
+	dimensions: [String!]!
+	"""
+	Time dimension column names (flat, back-compatible).
+	"""
+	timeDimensions: [String!]!
+	"""
+	Structured measures: aggregation, labels, formats.
+	"""
+	measureDetails: [MeasureInfo!]!
+	dimensionDetails: [DimensionInfo!]!
+	timeDimensionDetails: [TimeDimensionInfo!]!
+	joins: [JoinInfo!]!
+}
+
+"""
+Multi-stage query response
+"""
+type MultiStageResponse {
+	results: [QueryResponse!]!
+	executionTimeMs: Float!
+}
+
+type MutationRoot {
+	"""
+	Create a new model
+	"""
+	createModel(input: CreateModelInput!): ModelInfo!
+	"""
+	Update a model
+	"""
+	updateModel(name: String!, input: UpdateModelInput!): ModelInfo!
+	"""
+	Delete a model
+	"""
+	deleteModel(name: String!, datasource: String): Boolean!
+	"""
+	Create a new datasource
+	"""
+	createDatasource(input: CreateDatasourceInput!): DatasourceInfo!
+	"""
+	Update a datasource
+	"""
+	updateDatasource(name: String!, input: UpdateDatasourceInput!): DatasourceInfo!
+	"""
+	Delete a datasource (admin only)
+	"""
+	deleteDatasource(name: String!): Boolean!
+	"""
+	Save a memory
+	"""
+	saveMemory(input: SaveMemoryInput!): Memory!
+	"""
+	Delete a memory
+	"""
+	forgetMemory(id: String!): ForgetMemoryResponse!
+	"""
+	Ingest models from a datasource via warehouse introspection.
+	"""
+	ingestModels(datasource: String!): IngestionReport!
+}
+
+"""
+Order by input
+"""
+input OrderByInput {
+	field: String!
+	descending: Boolean
+}
+
+"""
+Main query input
+"""
+input QueryInput {
+	name: String
+	sourceModel: SourceSpecInput
+	measures: [MeasureInput!]
+	dimensions: [DimensionInput!]
+	timeDimensions: [TimeDimensionInput!]
+	filters: [FilterInput!]
+	order: [OrderByInput!]
+	limit: Int
+	offset: Int
+	wholePeriodsOnly: Boolean
+	distinctDimensionValues: Boolean
+	"""
+	Reference to a previous stage in a multi-stage query
+	"""
+	stageRef: String
+}
+
+"""
+Query response output
+"""
+type QueryResponse {
+	data: [JSON!]!
+	columns: [String!]!
+	sql: String
+	attributes: ResponseAttributes
+	population: Int
+	populationInferred: Boolean!
+	executionTimeMs: Float!
+}
+
+type QueryRoot {
+	"""
+	Execute a semantic query
+	"""
+	query(input: QueryInput!, dryRun: Boolean, explain: Boolean): QueryResponse!
+	"""
+	Execute multiple queries as a DAG.
+	
+	Each query can reference a previous stage via `stage_ref` to filter
+	results based on prior stage output.
+	"""
+	multiStageQuery(inputs: [QueryInput!]!, dryRun: Boolean): MultiStageResponse!
+	"""
+	List all models
+	"""
+	models(datasource: String): [ModelInfo!]!
+	"""
+	Get a specific model
+	"""
+	model(name: String!, datasource: String): ModelInfo
+	"""
+	Generate SQL without executing (still fully governed).
+	"""
+	dryRun(input: QueryInput!): DryRunResponse!
+	"""
+	List all datasources
+	"""
+	datasources: [DatasourceInfo!]!
+	"""
+	Get a single datasource by name.
+	
+	`connection_string` is intentionally not returned — it carries
+	credentials.
+	"""
+	datasource(name: String!): DatasourceInfo
+	"""
+	Search models
+	"""
+	search(q: String!, limit: Int): [SearchResult!]!
+	"""
+	Inspect a model. `datasource` is optional, matching `model`.
+	"""
+	inspect(model: String!, datasource: String): ModelInfo
+	"""
+	List memories
+	"""
+	memories(filter: MemoryFilter): [Memory!]!
+	"""
+	Get a specific memory
+	"""
+	memory(id: String!): Memory
+}
+
+"""
+Response attributes output
+"""
+type ResponseAttributes {
+	dimensions: JSONObject!
+	measures: JSONObject!
+}
+
+"""
+Save memory input
+"""
+input SaveMemoryInput {
+	learning: String!
+	linkedEntities: [String!]!
+	id: String
+	description: String
+}
+
+"""
+Search result output
+"""
+type SearchResult {
+	modelName: String!
+	datasource: String!
+	score: Float!
+	matchedFields: [String!]!
+	snippet: String!
+}
+
+"""
+Source specification input
+"""
+input SourceSpecInput {
+	model: String!
+	datasource: String
+	alias: String
+}
+
+type SubscriptionRoot {
+	"""
+	Poll a semantic query on an interval (WebSocket). GraphQL still buffers
+	each tick's payload; the SQL layer streams rows into that buffer.
+	"""
+	liveQuery(input: QueryInput!, intervalMs: Int!): QueryResponse!
+	"""
+	Subscribe to model changes (best-effort polling of model list fingerprints).
+	"""
+	modelChanges(datasource: String!): ModelChangeEvent!
+}
+
+"""
+Time dimension info output
+"""
+type TimeDimensionInfo {
+	dimension: String!
+	granularity: String!
+	label: String
+}
+
+"""
+Time dimension input
+"""
+input TimeDimensionInput {
+	dimension: String!
+	granularity: TimeGranularity!
+	label: String
+}
+
+"""
+Time granularity enum for GraphQL
+"""
+enum TimeGranularity {
+	SECOND
+	MINUTE
+	HOUR
+	DAY
+	WEEK
+	MONTH
+	QUARTER
+	YEAR
+}
+
+"""
+Update datasource input
+"""
+input UpdateDatasourceInput {
+	description: String
+	connectionString: String
+	poolSize: Int
+}
+
+"""
+Update model input
+"""
+input UpdateModelInput {
+	description: String
+	measures: [MeasureInput!]
+	dimensions: [DimensionInput!]
+	timeDimensions: [TimeDimensionInput!]
+	joins: [JoinInput!]
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: QueryRoot
+	mutation: MutationRoot
+	subscription: SubscriptionRoot
+}

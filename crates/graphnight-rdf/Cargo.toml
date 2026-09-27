@@ -1,0 +1,33 @@
+[package]
+name = "graphnight-rdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+categories.workspace = true
+keywords.workspace = true
+readme.workspace = true
+description = "RDF/SPARQL knowledge graph storage for GraphNight (scaffold)"
+
+[features]
+default = []
+storage = ["dep:oxigraph"]
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+oxigraph = { version = "0.5", optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+graphnight-core = { path = "../graphnight-core" }
+graphnight-storage = { path = "../graphnight-storage" }
+graphnight-sql = { path = "../graphnight-sql" }
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,33 @@
+[package]
+name = "graphnight-runtime"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+description = "Governed execution service, agent tool catalog, MCP server and agent runtime for GraphNight"
+
+[dependencies]
+graphnight-core = { path = "../graphnight-core" }
+graphnight-sql = { path = "../graphnight-sql" }
+graphnight-storage = { path = "../graphnight-storage" }
+async-trait = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+schemars = "0.9"
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+
+[dev-dependencies]
+axum = { version = "0.8", features = ["json", "tokio"] }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
