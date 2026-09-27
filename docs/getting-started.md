@@ -22,7 +22,7 @@ Binaries land in `target/release/graphnight` and `target/release/graphnight-serv
 ### Python client (PyPI)
 
 ```bash
-pip install graphnight==1.0.1
+pip install graphnight==1.2.0
 # optional pandas helper surface
 pip install 'graphnight[pandas]'
 ```

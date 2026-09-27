@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Performance
-- **FNV-1a hashing for cache keys**: replaced SipHash (`DefaultHasher`) with FNV-1a 64-bit hashing on plan-cache and result-cache keys. FNV-1a is ~2-3× faster to calculate and is adequate for cache keys over an uncontrolled domain; it is documented as not a MAC. Cold compile improved ~10% headline and ~3% across query families
-- **Result-cache shape reuse**: the result cache now stores the final `serde_json::Map` shape instead of raw `HashMap`s, so a cache hit is a single clone with no per-row conversion. The executor returns `HashMap`s and every consumer wants `Map`s, so the conversion is done once on miss and skipped entirely on hit
-
 ### Added
 - **OpenTelemetry tracing** for the plan → SQL → execute path: `sql.plan` and `sql.execute` spans (dialect, datasource, row count, cache hit, statement digest) exported over OTLP/HTTP when `GRAPHNIGHT_OTEL_EXPORTER_OTLP_ENDPOINT` is set. Standard `OTEL_*` variables are honoured too. Off by default — with no endpoint configured no exporter thread starts
 - **Cube and dbt importers** (`graphnight import cube|dbt`): convert an existing semantic model to GraphNight models, print for review, and store with `--apply`. Cube converts close to 1:1 (measures, dimensions, time dimensions, joins, `sql_table`); dbt converts columns and requires measures to be declared in `meta.graphnight_measures`, because dbt does not model metrics and guessing an aggregation would silently answer the wrong question. See [docs/migration-cube-dbt.md](docs/migration-cube-dbt.md)
@@ -51,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved clippy cleanliness across workspace (fixed `option_as_deref`, `unnecessary_map_or`, `unwrap_or_default`); the workspace is now warning-free under `cargo clippy --all-targets`
 - Removed the parallel GraphQL policy-enforcement helper, which duplicated `PolicyEnforcer`; its test coverage moved to the runtime, where enforcement actually happens
 - Removed the Elixir bindings, which were unmaintained relative to the rest of the workspace
+
+## [1.2.0] - 2026-09-27
+
+### Performance
+- **FNV-1a hashing for cache keys**: replaced SipHash (`DefaultHasher`) with FNV-1a 64-bit hashing on plan-cache and result-cache keys. FNV-1a is ~2-3× faster to calculate and is adequate for cache keys over an uncontrolled domain; it is documented as not a MAC. Cold compile improved ~10% headline and ~3% across query families
+- **Result-cache shape reuse**: the result cache now stores the final `serde_json::Map` shape instead of raw `HashMap`s, so a cache hit is a single clone with no per-row conversion. The executor returns `HashMap`s and every consumer wants `Map`s, so the conversion is done once on miss and skipped entirely on hit
 
 ## [1.0.1] - 2026-09-20
 
@@ -113,7 +115,8 @@ PyPI `graphnight` 0.4.0 (superseded by 1.0.0). See git tag `v0.4.0-beta` for the
 
 Initial public alpha (semantic core + `crates/` layout). See git tags `v0.1.0-alpha` … `v0.3.0-beta` for intermediate trains.
 
-[Unreleased]: https://github.com/niranjanaryan/graphnight/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/niranjanaryan/graphnight/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/niranjanaryan/graphnight/releases/tag/v1.2.0
 [1.0.1]: https://github.com/niranjanaryan/graphnight/releases/tag/v1.0.1
 [1.0.0]: https://github.com/niranjanaryan/graphnight/releases/tag/v1.0.0
 [0.4.0]: https://pypi.org/project/graphnight/0.4.0/

@@ -1,6 +1,6 @@
 # HTTP Client Usage
 
-Package: [`@graphnight/client`](https://www.npmjs.com/package/@graphnight/client) **1.0.1** — TypeScript client for GraphNight GraphQL API.
+Package: [`@graphnight/client`](https://www.npmjs.com/package/@graphnight/client) **1.2.0** — TypeScript client for GraphNight GraphQL API.
 
 The HTTP client talks to a remote GraphNight GraphQL server. For local execution without a server, use the [Native SDK](usage-native.md).
 

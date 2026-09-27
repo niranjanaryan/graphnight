@@ -1,6 +1,6 @@
 # GraphNight
 
-**Status: 1.0.1**
+**Status: 1.2.0**
 
 GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
 
@@ -180,7 +180,7 @@ Still do **not** expose this to the internet with production warehouse credentia
 pip install graphnight
 ```
 
-PyPI: https://pypi.org/project/graphnight/ (`1.0.1`)
+PyPI: https://pypi.org/project/graphnight/ (`1.2.0`)
 
 Bindings live under `crates/graphnight-python/` (Rust extension). Multi-platform wheels are built by `.github/workflows/wheels.yml` (Linux manylinux/musllinux, macOS, Windows) and published on version tags / manual dispatch. Optional: `pip install 'graphnight[pandas]'`.
 

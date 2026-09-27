@@ -19,6 +19,7 @@ crate-type = ["cdylib"]
 graphnight-core = { path = "../graphnight-core" }
 graphnight-sql = { path = "../graphnight-sql" }
 graphnight-storage = { path = "../graphnight-storage" }
+graphnight-runtime = { path = "../graphnight-runtime" }
 napi = { version = "2", features = ["napi8"] }
 napi-derive = "2"
 tokio = { workspace = true }
@@ -37,7 +38,7 @@ tempfile = { workspace = true }
 
 [package.metadata.napi]
 name = "graphnight"
-version = "1.0.0"
+version = "1.2.0"
 triples = {}
 platforms = [
     "x64-linux",

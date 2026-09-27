@@ -1,6 +1,6 @@
 # Native Node.js SDK Usage
 
-Package: [`@graphnight/native`](https://www.npmjs.com/package/@graphnight/native) **1.0.1** — Native Rust bindings for GraphNight via NAPI-RS.
+Package: [`@graphnight/native`](https://www.npmjs.com/package/@graphnight/native) **1.2.0** — Native Rust bindings for GraphNight via NAPI-RS.
 
 The native SDK provides **zero-copy direct access** to the GraphNight Rust engine. No HTTP server required — runs entirely in-process.
 

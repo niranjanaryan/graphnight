@@ -1,6 +1,6 @@
 # GraphNight docs
 
-Practical guides for GraphNight **1.0.1**. Start with getting started, then pick a surface (CLI, agent/MCP, GraphQL, Python, Node.js) or ops topic (auth, deploy).
+Practical guides for GraphNight **1.2.0**. Start with getting started, then pick a surface (CLI, agent/MCP, GraphQL, Python, Node.js) or ops topic (auth, deploy).
 
 ## Index
 
@@ -43,7 +43,7 @@ Practical guides for GraphNight **1.0.1**. Start with getting started, then pick
 
 - [README.md](../README.md) — features and quick start
 - [SECURITY.md](../SECURITY.md) — auth, CORS, secrets, reporting
-- [CHANGELOG.md](../CHANGELOG.md) — 1.0.1 notes and remaining gaps
+- [CHANGELOG.md](../CHANGELOG.md) — 1.2.0 notes and remaining gaps
 - [LAUNCH.md](../LAUNCH.md) — OSS vs production checklist
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — longer-term blueprint (many items vision-only)
 

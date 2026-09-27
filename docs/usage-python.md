@@ -1,13 +1,13 @@
 # Python Usage
 
-Package: [`graphnight`](https://pypi.org/project/graphnight/) **1.0.1** — PyO3 bindings over local YAML storage and the SQL engine.
+Package: [`graphnight`](https://pypi.org/project/graphnight/) **1.2.0** — PyO3 bindings over local YAML storage and the SQL engine.
 
 The Python client does **not** talk to a remote GraphNight GraphQL server. Server features (OIDC, HA Postgres metadata, Docker) live in the Rust binaries. For HTTP GraphQL from Python, call `/graphql` with any HTTP library and the headers from [usage-graphql.md](usage-graphql.md).
 
 ## Install
 
 ```bash
-pip install graphnight==1.0.1
+pip install graphnight==1.2.0
 pip install 'graphnight[pandas]'   # optional
 ```
 
