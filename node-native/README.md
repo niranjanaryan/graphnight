@@ -14,7 +14,7 @@ This package provides native Node.js bindings that expose the GraphNight semanti
 - 📦 **Self-contained** — No external GraphQL server needed for local execution
 - 🔒 **Type-safe** — Full TypeScript definitions included
 - 🌐 **Cross-platform** — Pre-built binaries for Linux, macOS, Windows, FreeBSD
-- 🔌 **Compatible API** — Same interface as the HTTP-based `@graphnight/sdk`
+- 🔌 **Compatible API** — Same interface as the HTTP-based `@graphnight/client`
 
 ## Installation
 
@@ -251,9 +251,9 @@ import type {
 } from '@graphnight/native';
 ```
 
-## Comparison: @graphnight/native vs @graphnight/sdk
+## Comparison: @graphnight/native vs @graphnight/client
 
-| Feature | @graphnight/native | @graphnight/sdk |
+| Feature | @graphnight/native | @graphnight/client |
 |---------|-------------------|-----------------|
 | **Transport** | Native (NAPI-RS) | HTTP/GraphQL |
 | **Server required** | No | Yes |
@@ -266,7 +266,7 @@ import type {
 ## When to Use Which
 
 - **@graphnight/native** — Embedding in Node.js apps, local development, serverless functions, edge computing
-- **@graphnight/sdk** — Connecting to remote GraphNight server, multi-tenant deployments, GraphQL subscriptions
+- **@graphnight/client** — Connecting to remote GraphNight server, multi-tenant deployments, GraphQL subscriptions
 
 ## Development
 
@@ -298,5 +298,5 @@ MIT — See [LICENSE](../LICENSE) for details.
 - [GraphNight GitHub](https://github.com/niranjanaryan/graphnight)
 - [Python SDK](https://pypi.org/project/graphnight/)
 - [Elixir SDK](https://hex.pm/packages/graphnight)
-- [HTTP SDK (@graphnight/sdk)](https://www.npmjs.com/package/@graphnight/sdk)
+- [HTTP SDK (@graphnight/client)](https://www.npmjs.com/package/@graphnight/client)
 - [Documentation](https://github.com/niranjanaryan/graphnight/tree/main/docs)

@@ -8,7 +8,7 @@ Native Node.js bindings for **GraphNight** — high-performance semantic layer w
 - 🔌 **Zero-copy** — Efficient data transfer between Rust and Node.js
 - 📦 **Prebuilt binaries** — Linux (x64, ARM64), macOS (x64, ARM64), Windows (x64), FreeBSD
 - 🔒 **Type-safe** — Full TypeScript definitions included
-- 🎯 **Same API** — Identical interface to the HTTP-based `@graphnight/sdk`
+- 🎯 **Same API** — Identical interface to the HTTP-based `@graphnight/client`
 
 ## Installation
 
@@ -270,9 +270,9 @@ const query: QueryInput = {
 };
 ```
 
-## @graphnight/native vs @graphnight/sdk
+## @graphnight/native vs @graphnight/client
 
-| Feature | @graphnight/native | @graphnight/sdk |
+| Feature | @graphnight/native | @graphnight/client |
 |---------|-------------------|-----------------|
 | **Transport** | Native NAPI | HTTP/GraphQL |
 | **Server Required** | No | Yes |
@@ -287,7 +287,7 @@ Use `@graphnight/native` for:
 - Maximum performance
 - Offline/air-gapped environments
 
-Use `@graphnight/sdk` for:
+Use `@graphnight/client` for:
 - Remote GraphNight server
 - Multi-language environments
 - Serverless functions

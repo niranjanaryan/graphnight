@@ -274,7 +274,7 @@ import type {
 
 ## Native vs HTTP SDK
 
-| Feature | @graphnight/native | @graphnight/sdk |
+| Feature | @graphnight/native | @graphnight/client |
 |---------|-------------------|-----------------|
 | **Transport** | Native (NAPI-RS) | HTTP/GraphQL |
 | **Server required** | No | Yes |
@@ -288,7 +288,7 @@ import type {
 ## When to Use
 
 - **@graphnight/native** — Embedding in Node.js apps, local development, serverless functions, edge computing, high-performance analytics
-- **@graphnight/sdk** — Connecting to remote GraphNight server, multi-tenant deployments, GraphQL subscriptions, shared server
+- **@graphnight/client** — Connecting to remote GraphNight server, multi-tenant deployments, GraphQL subscriptions, shared server
 
 ## Development
 

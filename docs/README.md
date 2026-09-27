@@ -11,6 +11,7 @@ Practical guides for GraphNight **1.2.0**. Start with getting started, then pick
 | [usage-cli.md](usage-cli.md) | `init`, `model list`, dry-run, search, multi-stage, `serve` tip |
 | [usage-agent.md](usage-agent.md) | MCP server, built-in agent, tool catalog, governance |
 | [migration-cube-dbt.md](migration-cube-dbt.md) | `graphnight import cube` / `import dbt` |
+| [usage-elixir.md](usage-elixir.md) | `mix deps.get`, `iex`, `GraphNight.query/2`, Ecto integration |
 | [usage-graphql.md](usage-graphql.md) | curl, `dryRun`, auth headers, GraphiQL |
 | [usage-python.md](usage-python.md) | `pip install graphnight` and client examples |
 | [usage-native.md](usage-native.md) | `npm install @graphnight/native` — Native Rust bindings |
@@ -26,6 +27,7 @@ Practical guides for GraphNight **1.2.0**. Start with getting started, then pick
 | **Node.js (Native)** | `@graphnight/native` | `npm install @graphnight/native` | [npm](https://www.npmjs.com/package/@graphnight/native) • [Source](../crates/graphnight-node) |
 | **Node.js (HTTP)** | `@graphnight/client` | `npm install @graphnight/client` | [npm](https://www.npmjs.com/package/@graphnight/client) • [Source](../node-client) |
 | **Rust** | `graphnight-*` crates | `cargo add graphnight-core` | [crates.io](https://crates.io/search?q=graphnight) • [Source](../crates) |
+| **Elixir** | `:graphnight` | `mix deps.add :graphnight` | [Hex](https://hex.pm/packages/graphnight) • [Source](../graphnight-elixir-repo) |
 
 ## Examples in-repo
 
