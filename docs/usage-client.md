@@ -1,6 +1,6 @@
 # HTTP Client Usage
 
-Package: [`@graphnight/client`](https://www.npmjs.com/package/@graphnight/client) **1.0.0** — TypeScript client for GraphNight GraphQL API.
+Package: [`@graphnight/client`](https://www.npmjs.com/package/@graphnight/client) **1.0.1** — TypeScript client for GraphNight GraphQL API.
 
 The HTTP client talks to a remote GraphNight GraphQL server. For local execution without a server, use the [Native SDK](usage-native.md).
 
@@ -463,9 +463,9 @@ npx tsc --init
 ## Next Steps
 
 - [Native SDK Usage](usage-native.md) — Local execution with native bindings
+- [Agent & MCP](usage-agent.md) — MCP server, built-in agent, tool catalog
 - [GraphQL Usage](usage-graphql.md) — Raw GraphQL operations
 - [Python Usage](usage-python.md) — Python SDK for local execution
-- [Elixir Usage](usage-elixir.md) — Elixir bindings with Ecto
 - [CLI Usage](usage-cli.md) — Command-line interface
 - [Authentication](auth.md) — Auth configuration
 - [Deployment](deploy.md) — Production deployment
