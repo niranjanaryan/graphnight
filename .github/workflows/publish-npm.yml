@@ -11,10 +11,11 @@ permissions:
   packages: write
 
 jobs:
-  publish-native:
-    name: Publish @graphnight/native
+  build-native:
+    name: Build @graphnight/native (${{ matrix.target }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         target:
           - x86_64-unknown-linux-gnu
@@ -24,11 +25,6 @@ jobs:
           - x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -39,12 +35,33 @@ jobs:
       - name: Build native binary
         working-directory: crates/graphnight-node
         run: napi build --platform --release --target ${{ matrix.target }}
-      - name: Copy binary into SDK package
-        run: |
-          SRC=$(ls crates/graphnight-node/graphnight.*-${{ matrix.target }}.node 2>/dev/null | head -1)
-          if [ -n "$SRC" ]; then
-            cp "$SRC" node-native/
-          fi
+      - name: Upload native binary
+        uses: actions/upload-artifact@v8
+        with:
+          name: native-${{ matrix.target }}
+          path: crates/graphnight-node/graphnight.*.node
+          retention-days: 1
+
+  publish-native:
+    name: Publish @graphnight/native
+    needs: [build-native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Download all native binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: native-*
+          path: node-native/
+          merge-multiple: true
+      - name: List binaries
+        working-directory: node-native
+        run: ls -lah *.node 2>/dev/null || echo "no .node files"
       - name: Publish
         working-directory: node-native
         run: npm publish --access public
