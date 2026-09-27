@@ -78,7 +78,7 @@ jobs:
       - name: List artifacts
         run: ls -lah dist/
       - name: Attest
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
       - name: Publish to PyPI
