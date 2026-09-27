@@ -23,6 +23,60 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --exclude graphnight-python -- -D warnings
+      - name: Check Python bindings compile
+        run: cargo check -p graphnight-python
+      - name: Check Node bindings compile
+        run: cargo check -p graphnight-node
+
+  schema-sdl:
+    name: Schema SDL snapshot is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      # The Node client validates its GraphQL documents against this snapshot.
+      # Regenerate and commit when the schema changes:
+      #   GRAPHNIGHT_WRITE_SDL=1 cargo test -p graphnight-graphql
+      - name: Regenerate SDL snapshot
+        run: GRAPHNIGHT_WRITE_SDL=1 cargo test -p graphnight-graphql test_export_sdl
+      - name: Fail if snapshot is stale
+        run: |
+          if ! git diff --quiet -- node-client/tests/schema.graphql; then
+            echo "::error::node-client/tests/schema.graphql is stale. Regenerate with:"
+            echo "::error::  GRAPHNIGHT_WRITE_SDL=1 cargo test -p graphnight-graphql"
+            git diff -- node-client/tests/schema.graphql
+            exit 1
+          fi
+
+  node-client:
+    name: Node client (typecheck + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: node-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: node-client/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Test
+        run: npx jest
+      - name: Lint
+        run: npx eslint 'src/**/*.ts'
 
   test:
     name: Test (Linux)
@@ -132,7 +186,7 @@ jobs:
       - name: Generate SBOM
         run: cargo sbom > sbom.spdx.json
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v8
         with:
           name: sbom
           path: sbom.spdx.json
