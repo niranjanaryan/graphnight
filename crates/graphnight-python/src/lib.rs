@@ -1,21 +1,46 @@
+// PyO3's `pymethods` macro generates an `impl` block inside a struct
+// definition, which newer Rust versions flag as a non-local definition.
+// This is a PyO3 limitation, not a real issue.
+#![allow(non_local_definitions)]
+
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList, PyModule};
 use pyo3::Python;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use graphnight_core::models::{
     AggregationType, DataSource, Dimension, Filter, FilterOperator, Formula, Measure, Model,
     OrderBy, Query as CoreQuery, SourceSpec, TimeDimension, TimeGranularity,
 };
+use graphnight_runtime::governance::{CallContext, ExecuteOptions, QueryService};
 use graphnight_sql::SqlEngine;
 use graphnight_storage::{Memory, MemoryFilter, StorageBackend, YamlStorage};
+
+/// The call context for an embedded (in-process) client.
+///
+/// There is no server and no credential channel, so the host process is the
+/// identity: it is trusted and unrestricted. What still applies is the
+/// structural governance the service always enforces — model and datasource
+/// resolution, the row cap, column masks and the audit trail.
+fn embedded_context() -> CallContext {
+    CallContext {
+        user_id: Some("embedded".to_string()),
+        tenant_id: None,
+        is_admin: true,
+        auth_required: false,
+        policy: None,
+        principal_label: Some("python".to_string()),
+    }
+}
 
 /// Local YAML-backed GraphNight client for embedding in Python.
 #[pyclass]
 pub struct GraphNightClient {
-    sql_engine: Mutex<SqlEngine>,
+    /// All query execution goes through the service, so an embedded client gets
+    /// the same row cap, column masks and audit trail as the server.
+    service: Arc<QueryService>,
     storage: Arc<dyn StorageBackend>,
     runtime: tokio::runtime::Runtime,
 }
@@ -101,6 +126,9 @@ fn parse_filter_operator(s: &str) -> FilterOperator {
         "is_not_null" => FilterOperator::IsNotNull,
         "between" => FilterOperator::Between,
         "not_between" => FilterOperator::NotBetween,
+        "intersects" => FilterOperator::Intersects,
+        "within" => FilterOperator::Within,
+        "contains" => FilterOperator::Contains,
         _ => FilterOperator::Eq,
     }
 }
@@ -307,15 +335,26 @@ impl GraphNightClient {
             .block_on(storage.list_models(None))
             .map_err(|e| runtime_error(e))?;
 
-        let dialect = graphnight_sql::dialects::get_dialect("postgres");
+        let datasources = runtime
+            .block_on(storage.list_datasources())
+            .map_err(|e| runtime_error(e))?;
+
+        // Default dialect only covers models pointing at an unregistered
+        // datasource; with_datasources resolves each model to its own driver.
+        let default_driver = datasources
+            .first()
+            .map(|d| d.driver.clone())
+            .unwrap_or_else(|| "postgres".to_string());
+        let dialect = graphnight_sql::dialects::get_dialect(&default_driver);
         let conn_manager = Arc::new(graphnight_sql::executor::ConnectionManager::new());
         let executor = Arc::new(graphnight_sql::executor::QueryExecutor::new(conn_manager));
         let sql_engine = SqlEngine::new(dialect, executor)
             .map_err(|e| runtime_error(e))?
+            .with_datasources(datasources)
             .with_models(models);
 
         Ok(Self {
-            sql_engine: Mutex::new(sql_engine),
+            service: Arc::new(QueryService::new(Arc::new(sql_engine), storage.clone())),
             storage,
             runtime,
         })
@@ -324,51 +363,21 @@ impl GraphNightClient {
     /// Execute a query against the model's datasource and return data + SQL.
     fn query(&self, py: Python, query: &PyDict) -> PyResult<PyObject> {
         let core_query = self.dict_to_query(query).map_err(|e| runtime_error(e))?;
-        let storage = self.storage.clone();
         let start = std::time::Instant::now();
 
-        let model_name = core_query
-            .name
-            .as_ref()
-            .or_else(|| core_query.source_model.as_ref().map(|s| &s.model))
-            .ok_or_else(|| runtime_error("Query must have name or source_model"))?
-            .clone();
-
-        let model = self
+        let outcome = self
             .runtime
-            .block_on(storage.get_model(&model_name, None))
-            .map_err(|e| runtime_error(e))?
-            .ok_or_else(|| runtime_error(format!("Model not found: {}", model_name)))?;
-
-        let datasource = self
-            .runtime
-            .block_on(storage.get_datasource(&model.datasource))
-            .map_err(|e| runtime_error(e))?
-            .ok_or_else(|| runtime_error(format!("Datasource not found: {}", model.datasource)))?;
-
-        let engine = self
-            .sql_engine
-            .lock()
-            .map_err(|e| runtime_error(e.to_string()))?;
-        let sql = engine
-            .generate_sql(&core_query)
+            .block_on(self.service.execute(
+                &embedded_context(),
+                core_query,
+                ExecuteOptions::executing(),
+            ))
             .map_err(|e| runtime_error(e))?;
-        let results = self
-            .runtime
-            .block_on(engine.execute_sqlx(&datasource, &sql))
-            .map_err(|e| runtime_error(e))?;
-        drop(engine);
 
-        let columns: Vec<String> = if !results.is_empty() {
-            results[0].keys().cloned().collect()
-        } else {
-            vec![]
-        };
-
-        let data: Vec<Value> = results
-            .into_iter()
-            .map(|m| serde_json::to_value(m).unwrap())
-            .collect();
+        let sql = outcome.sql.clone().unwrap_or_default();
+        let columns = outcome.columns.clone();
+        // The service already normalised rows; pass them straight through.
+        let data: Vec<Value> = outcome.data;
 
         let mut response = HashMap::new();
         response.insert("data".to_string(), Value::Array(data));
@@ -395,29 +404,36 @@ impl GraphNightClient {
     /// Generate SQL for a query without executing it.
     fn generate_sql(&self, query: &PyDict) -> PyResult<String> {
         let core_query = self.dict_to_query(query).map_err(|e| runtime_error(e))?;
-        let engine = self
-            .sql_engine
-            .lock()
-            .map_err(|e| runtime_error(e.to_string()))?;
-        engine
-            .generate_sql(&core_query)
-            .map_err(|e| runtime_error(e))
+        let outcome = self
+            .runtime
+            .block_on(self.service.execute(
+                &embedded_context(),
+                core_query,
+                ExecuteOptions::dry_run(),
+            ))
+            .map_err(|e| runtime_error(e))?;
+        Ok(outcome.sql.unwrap_or_default())
     }
 
     /// Dry-run a query: return generated SQL (and echo of the model name) without hitting a DB.
     fn dry_run_query(&self, py: Python, query: &PyDict) -> PyResult<PyObject> {
         let core_query = self.dict_to_query(query).map_err(|e| runtime_error(e))?;
-        let engine = self
-            .sql_engine
-            .lock()
-            .map_err(|e| runtime_error(e.to_string()))?;
-        let sql = engine
-            .generate_sql(&core_query)
+        let name = core_query.name.clone();
+        let outcome = self
+            .runtime
+            .block_on(self.service.execute(
+                &embedded_context(),
+                core_query,
+                ExecuteOptions::dry_run(),
+            ))
             .map_err(|e| runtime_error(e))?;
 
         let mut map = HashMap::new();
-        map.insert("sql".to_string(), Value::String(sql));
-        if let Some(name) = core_query.name {
+        map.insert(
+            "sql".to_string(),
+            Value::String(outcome.sql.unwrap_or_default()),
+        );
+        if let Some(name) = name {
             map.insert("name".to_string(), Value::String(name));
         }
         value_to_py(py, Value::Object(map.into_iter().collect()))
@@ -529,13 +545,11 @@ impl GraphNightClient {
             .block_on(async move { storage.create_model(core_model).await })
             .map_err(|e| runtime_error(e))?;
 
-        {
-            let mut engine = self
-                .sql_engine
-                .lock()
-                .map_err(|e| runtime_error(e.to_string()))?;
-            engine.register_model(created.clone());
-        }
+        // Register in the SQL engine too, else the new model would be listed
+        // and searchable but fail to generate SQL.
+        self.service
+            .register_model(&embedded_context(), created.clone())
+            .map_err(|e| runtime_error(e))?;
 
         let mut map = HashMap::new();
         map.insert("name".to_string(), Value::String(created.name));
