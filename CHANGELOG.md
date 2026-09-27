@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- **FNV-1a hashing for cache keys**: replaced SipHash (`DefaultHasher`) with FNV-1a 64-bit hashing on plan-cache and result-cache keys. FNV-1a is ~2-3× faster to calculate and is adequate for cache keys over an uncontrolled domain; it is documented as not a MAC. Cold compile improved ~10% headline and ~3% across query families
+- **Result-cache shape reuse**: the result cache now stores the final `serde_json::Map` shape instead of raw `HashMap`s, so a cache hit is a single clone with no per-row conversion. The executor returns `HashMap`s and every consumer wants `Map`s, so the conversion is done once on miss and skipped entirely on hit
+
 ### Added
+- **OpenTelemetry tracing** for the plan → SQL → execute path: `sql.plan` and `sql.execute` spans (dialect, datasource, row count, cache hit, statement digest) exported over OTLP/HTTP when `GRAPHNIGHT_OTEL_EXPORTER_OTLP_ENDPOINT` is set. Standard `OTEL_*` variables are honoured too. Off by default — with no endpoint configured no exporter thread starts
+- **Cube and dbt importers** (`graphnight import cube|dbt`): convert an existing semantic model to GraphNight models, print for review, and store with `--apply`. Cube converts close to 1:1 (measures, dimensions, time dimensions, joins, `sql_table`); dbt converts columns and requires measures to be declared in `meta.graphnight_measures`, because dbt does not model metrics and guessing an aggregation would silently answer the wrong question. See [docs/migration-cube-dbt.md](docs/migration-cube-dbt.md)
+- **`.env` loading** in the server and CLI binaries, so the committed `.env.example` is actionable. A value already exported into the environment wins
+- **SECURITY.md**: private vulnerability reporting, severity and response expectations, supported versions, deployment guidance, and a plain list of known limitations
+- **MCP server** (`/mcp` over HTTP, `graphnight mcp --stdio` for local use): JSON-RPC tool interface over the same governed service as GraphQL and REST
+- **CLI agent** (`graphnight agent`): bounded tool-calling loop with Anthropic and OpenAI-compatible providers, step/turn budgets, and a trace
+- **CLI tool access** (`graphnight tools list|show|call`): invoke any tool directly, `--all` to include mutating tools
+- **Semantic-layer mutation tools**: `create_model`, `update_model`, `delete_model`, `create_datasource`, `update_datasource`, `delete_datasource`; admin-only, hidden unless mutations are enabled, and refused for a datasource that is in use
+- **Memory tools**: `remember` and `recall_memories` with user/global scoping, so a caller only sees memories its scope allows
+- **REST** `POST /api/v1/query/multi-stage` and `GET /api/v1/search`
+- **Strict aggregation validation**: `AggregationType::parse_strict` rejects anything that is not a plain (optionally schema-qualified) identifier, closing a SQL-injection path in the REST query body
+- **Runtime model registration**: `QueryService::register_model` / `unregister_model`, so a model created or updated while the process is running becomes queryable immediately
 - **Model Ingestion from DB Schema** (`ingestModels` mutation): Auto-generates semantic models (measures, dimensions, time_dimensions, joins) from PostgreSQL, MySQL, and SQLite databases via `information_schema` / `sqlite_master` introspection
 - **Multi-Stage DAG Queries** (`multiStageQuery` query): Execute multiple queries as a directed acyclic graph with topological sorting and cycle detection; stages can reference previous stage results via `stage_ref` for filter chaining
 - **Schema Introspection Module** (`graphnight-sql::introspection`): Public API for table/column/foreign key discovery and automatic model inference
@@ -15,10 +31,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions Wheels: Cross-platform Python wheel builds (Linux/macOS/Windows) + PyPI publish on tag push
 - Dependabot config for automated dependency updates (Cargo, GitHub Actions, pip)
 
+### Security
+- **MySQL string-literal escaping**: backslashes are now escaped before quotes. MySQL treats a backslash as an escape character inside string literals, so a filter value of `\'` previously emitted a literal whose quote was escaped rather than closed, letting the remainder of the value be parsed as SQL. Values are escaped and interpolated rather than sent as bound parameters; the escaping is what makes that safe, and it is now correct on all four dialects
+- `SECURITY.md` documents that filter values are escaped and interpolated rather than bound as parameters, instead of claiming otherwise
+
+### Fixed
+- **CLI `query run` short-option collision**: `--file` and `--format` both claimed `-f`, which panics under `clap`'s debug assertions. `--format` is now long-only
+
 ### Changed
+- **One governed query path**: GraphQL, REST, MCP, the agent, the CLI and both language SDKs now execute through a single `QueryService`, which owns policy, row caps, column masks, timeouts, audit and error mapping. No interface has its own SQL execution path
+- **Search is policy-filtered**: `search` filters the shared model index through the service, so a caller cannot discover a model their policy denies
+- **WebSocket subscriptions** pass `Authorization` / `X-API-Key` and tenant in `connection_init`; every tick is governed and errors are delivered on the stream instead of terminating it
+- The SQL engine's model registry is now interior-mutable, fixing a bug where models created through the admin API were listed and searchable but failed to generate SQL
+- Metadata endpoints (`models`, `model`, `datasources`, `datasource`) are policy-filtered on both GraphQL and REST
+- `graphnight sql <file>` is documented as the older spelling of `graphnight query dry-run`; both are now governed
+- `query` JSON files may omit empty `measures` / `dimensions` / `filters` / `order` / `time_dimensions` arrays
 - `multiStageQuery` moved from Mutation to Query (read-only DAG execution)
 - `QueryInput` now includes optional `stage_ref` field for multi-stage query dependencies
-- Improved clippy cleanliness across workspace (fixed `option_as_deref`, `unnecessary_map_or`, `unwrap_or_default`)
+- Improved clippy cleanliness across workspace (fixed `option_as_deref`, `unnecessary_map_or`, `unwrap_or_default`); the workspace is now warning-free under `cargo clippy --all-targets`
+- Removed the parallel GraphQL policy-enforcement helper, which duplicated `PolicyEnforcer`; its test coverage moved to the runtime, where enforcement actually happens
+- Removed the Elixir bindings, which were unmaintained relative to the rest of the workspace
 
 ## [1.0.1] - 2026-09-20
 

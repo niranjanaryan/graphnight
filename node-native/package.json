@@ -1,6 +1,6 @@
 {
   "name": "@graphnight/native",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Native Node.js bindings for GraphNight semantic layer - zero-copy Rust engine access",
   "main": "index.js",
   "types": "index.d.ts",

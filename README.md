@@ -1,10 +1,10 @@
 # GraphNight
 
-**Status: 1.0.0**
+**Status: 1.0.1**
 
 GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
 
-> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Elixir (Hex.pm)](https://hex.pm/packages/graphnight) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/native)
+> **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/native)
 
 See [LAUNCH.md](LAUNCH.md) for the full checklist. Remaining gaps (vault secret managers, some observability polish) are documented under Security notes in [CHANGELOG.md](CHANGELOG.md).
 
@@ -152,7 +152,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the longer-term blueprint (REST, MCP,
 | [docs/usage-cli.md](docs/usage-cli.md) | CLI: init, model list, dry-run, serve tip |
 | [docs/usage-graphql.md](docs/usage-graphql.md) | curl, dryRun, auth headers, GraphiQL |
 | [docs/usage-python.md](docs/usage-python.md) | `pip install graphnight` + client examples |
-| [docs/usage-node.md](docs/usage-node.md) | `npm install @graphnight/sdk` + TypeScript examples |
+| [docs/usage-client.md](docs/usage-client.md) | `npm install @graphnight/client` + TypeScript examples |
 | [docs/auth.md](docs/auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant, `DEV_OPEN` |
 | [docs/deploy.md](docs/deploy.md) | Docker, compose HA, reverse-proxy TLS, env cheat sheet |
 
@@ -172,7 +172,7 @@ cargo run -p graphnight-server -- --host 127.0.0.1 --storage-path ./examples/dat
 
 When keys or OIDC are set: anonymous requests fail; queries use `PolicyEnforcer`; datasource/model writes need an admin identity. See [docs/auth.md](docs/auth.md) and [SECURITY.md](SECURITY.md) for CORS (`GRAPHNIGHT_CORS_ORIGINS`), TLS (terminate at a reverse proxy), and `env:VARNAME` datasource secret refs.
 
-Still do **not** expose this to the internet with production warehouse credentials. Vault integrations and some policy edges (column masks, full query timeout) remain incomplete — see [CHANGELOG.md](CHANGELOG.md).
+Still do **not** expose this to the internet with production warehouse credentials without working through [SECURITY.md](SECURITY.md) first — it lists what is enforced on every path, the settings that change that, and the known limitations. Column masks and end-to-end query timeouts are implemented; Vault integration is not (use `env:VARNAME` secret refs).
 
 ## Python
 
@@ -197,21 +197,9 @@ Runnable scripts: [`examples/python/`](examples/python/).
 | Language | Package | Install |
 |----------|---------|---------|
 | **Python** | [PyPI: graphnight](https://pypi.org/project/graphnight/) | `pip install graphnight` |
-| **Elixir** | [Hex.pm: graphnight](https://hex.pm/packages/graphnight) | `{:graphnight, "~> 1.0"}` in `mix.exs` |
 | **Node.js (Native)** | [npm: @graphnight/native](https://www.npmjs.com/package/@graphnight/native) | `npm install @graphnight/native` |
 | **Node.js (HTTP)** | [npm: @graphnight/client](https://www.npmjs.com/package/@graphnight/client) | `npm install @graphnight/client` |
 | **Rust** | Workspace crates | `cargo add graphnight-core` |
-### Elixir Bindings
-
-Native Rustler NIF bindings providing zero-copy access to the GraphNight engine:
-
-```elixir
-{:ok, engine} = GraphNight.Client.init("./graphnight_data")
-{:ok, result} = GraphNight.Client.execute_query(engine, query)
-```
-
-See [graphnight-elixir](https://github.com/niranjanaryan/graphnight-elixir) for full documentation.
-
 ### Node.js Native SDK (@graphnight/native)
 
 Zero-copy native bindings via NAPI-RS — runs the Rust engine directly in Node.js:
@@ -262,6 +250,18 @@ cargo clippy --workspace --exclude graphnight-python --all-targets
 ```
 
 CI runs unit/integration tests plus an example CLI dry-run (see `.github/workflows/ci.yml`).
+
+## Benchmarks
+
+Reproducible benchmark harness for the GraphNight research paper. All numbers
+in `docs/paper/paper.tex` (Tables 1–5) are produced by the commands in
+[BENCHMARKS.md](BENCHMARKS.md) on macOS / Apple Silicon, Rust release profile.
+
+```bash
+cargo bench -p graphnight-sql            # E1 (compilation latency), E3 (policy overhead)
+cargo test -p graphnight-e2e --test conformance  # E2 (cross-dialect conformance)
+cargo build --release -p graphnight-server && <E5 recipe in BENCHMARKS.md>  # throughput
+```
 
 ## Contributing
 

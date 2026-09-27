@@ -1,10 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/graphnight-telemetry",
     "crates/graphnight-core",
     "crates/graphnight-sql",
     "crates/graphnight-storage",
+    "crates/graphnight-rdf",
     "crates/graphnight-graphql",
+    "crates/graphnight-runtime",
     "crates/graphnight-python",
     "crates/graphnight-node",
     "crates/graphnight-server",
@@ -14,7 +17,7 @@ members = [
 exclude = []
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["GraphNight Team"]
@@ -24,11 +27,6 @@ homepage = "https://github.com/niranjanaryan/graphnight"
 categories = ["database", "analytics", "graphql", "semantic-layer", "rust"]
 keywords = ["semantic-layer", "graphql", "sql", "analytics", "rust", "bi"]
 readme = "README.md"
-funding = [
-    { github = "niranjanaryan" },
-    { patreon = "niranjanaryan" },
-    { open_collective = "graphnight" },
-]
 
 [workspace.dependencies]
 # Core data processing - use custom SQL generator, avoid datafusion/parquet issues
@@ -56,9 +54,25 @@ anyhow = "1.0"
 config = "0.14"
 toml = { version = "0.8" }
 
-# Logging
+# Logging + tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+opentelemetry = { version = "0.33", features = ["trace"] }
+# The current-thread variant gives the batch exporter its own runtime on a
+# dedicated thread. The default `rt-tokio` calls `tokio::spawn` from that
+# background thread, which panics with "no reactor running" because a std
+# thread has no runtime context.
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio-current-thread"] }
+# The blocking reqwest client, not the async one. The batch span processor
+# exports from a dedicated std thread, where the async client's lazy reactor
+# requirement fails with "there is no reactor running". A blocking client
+# removes the runtime dependency entirely, which also means `init` works from a
+# plain `fn main`.
+opentelemetry-otlp = { version = "0.33", features = ["trace", "http-proto", "reqwest-blocking-client"] }
+tracing-opentelemetry = "0.34"
+
+graphnight-telemetry = { path = "crates/graphnight-telemetry" }
+dotenvy = "0.15"
 
 # GraphQL + HTTP
 async-graphql = { version = "7.0", features = ["chrono"] }
