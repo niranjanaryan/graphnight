@@ -112,13 +112,31 @@ fn cube_join_becomes_a_column_pair() {
 }
 
 #[test]
-fn cube_sql_table_becomes_the_model_sql() {
+fn cube_sql_table_becomes_a_usable_sql_override() {
+    // GraphNight derives the table from the model name, so a cube reading a
+    // schema-qualified table must carry a real SELECT for the generator to
+    // inline. A bare `public.orders` would land in the FROM clause verbatim and
+    // fail to parse.
     let orders = cube_report()
         .models
         .into_iter()
         .find(|m| m.name == "orders")
         .unwrap();
-    assert_eq!(orders.sql.as_deref(), Some("public.orders"));
+    assert_eq!(orders.sql.as_deref(), Some("SELECT * FROM public.orders"));
+}
+
+#[test]
+fn cube_whose_table_matches_its_name_needs_no_override() {
+    let yml = r#"
+cubes:
+  - name: orders
+    sql_table: orders
+    measures:
+      - name: revenue
+        sql: sum(amount)
+"#;
+    let report = import_cube_str(yml, "demo").unwrap();
+    assert_eq!(report.models[0].sql, None);
 }
 
 #[test]
@@ -431,5 +449,127 @@ fn unparseable_manifest_is_an_error_not_a_panic() {
     assert!(
         err.to_string().contains("manifest.json"),
         "error should name the file: {err}"
+    );
+}
+
+/// dbt writes a model's `config: meta:` block to `config.meta` in the
+/// manifest. The importer previously read only the node's top level `meta`, so
+/// the spelling in the migration guide produced a dimensions-only model.
+#[test]
+fn dbt_reads_measures_from_config_meta() {
+    let manifest = r#"{"nodes": {"model.p.fct_orders": {
+        "resource_type": "model",
+        "name": "fct_orders",
+        "config": {
+            "materialized": "table",
+            "meta": {"graphnight_measures": [
+                {"name": "revenue", "column": "amount_usd", "aggregation": "sum"}
+            ]}
+        }
+    }}}"#;
+
+    let report = import_dbt_str(manifest, "demo").unwrap();
+    let orders = &report.models[0];
+
+    assert_eq!(orders.measures.len(), 1, "measures: {:?}", orders.measures);
+    assert_eq!(orders.measures[0].formula.label.as_deref(), Some("revenue"));
+    assert_eq!(orders.measures[0].formula.expression, "amount_usd");
+    assert_eq!(orders.measures[0].aggregation, AggregationType::Sum);
+    assert!(
+        !report
+            .warnings
+            .iter()
+            .any(|w| w.contains("dimensions-only")),
+        "unexpected warning: {:?}",
+        report.warnings
+    );
+}
+
+/// The top-level spelling still works, for dbt versions and project configs
+/// that carry `meta` outside `config`.
+#[test]
+fn dbt_still_reads_top_level_meta() {
+    let manifest = r#"{"nodes": {"model.p.fct_orders": {
+        "resource_type": "model",
+        "name": "fct_orders",
+        "config": {"materialized": "table"},
+        "meta": {"graphnight_measures": [
+            {"name": "revenue", "column": "amount_usd", "aggregation": "sum"}
+        ]}
+    }}}"#;
+
+    let report = import_dbt_str(manifest, "demo").unwrap();
+    assert_eq!(report.models[0].measures.len(), 1);
+}
+
+/// Measures declared under `config.meta` must not be reported as missing, and a
+/// model with neither spelling must still warn.
+#[test]
+fn dbt_without_measures_warns_once() {
+    let manifest = r#"{"nodes": {"model.p.fct_orders": {
+        "resource_type": "model",
+        "name": "fct_orders",
+        "config": {"materialized": "table"},
+        "columns": {"id": {"name": "id", "data_type": "integer"}}
+    }}}"#;
+
+    let report = import_dbt_str(manifest, "demo").unwrap();
+    assert_eq!(report.models[0].measures.len(), 0);
+    assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+    assert!(
+        report.warnings[0].contains("config"),
+        "{:?}",
+        report.warnings
+    );
+}
+
+#[test]
+fn a_join_to_a_cube_that_is_not_in_the_file_is_reported() {
+    // The target cube is absent. Import must not silently produce a model that
+    // looks joined but will not generate: the query would otherwise reach a
+    // table outside the model registry, which is also outside policy.
+    let schema = r#"
+cubes:
+  - name: orders
+    sql_table: public.orders
+    measures:
+      - name: total_amount
+        sql: sum(amount_usd)
+    dimensions:
+      - name: customer_id
+    joins:
+      - name: customers
+        sql: "{CUBE}.customer_id = {customers}.id"
+        relationship: many_to_one
+"#;
+    let report = import_cube_str(schema, "pg").expect("import");
+    let orders = report
+        .models
+        .iter()
+        .find(|m| m.name == "orders")
+        .expect("orders should import");
+    assert_eq!(orders.joins.len(), 1, "the join is kept, not dropped");
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|w| w.contains("not a registered model")),
+        "a dangling join target should be reported: {:?}",
+        report.warnings
+    );
+}
+
+#[test]
+fn a_join_to_a_cube_defined_later_in_the_file_is_not_reported() {
+    // `customers` is declared after `orders`, which is normal in a Cube schema
+    // and must not be mistaken for a dangling reference.
+    let report = import_cube_str(CUBE_SCHEMA, "pg").expect("import");
+    assert!(
+        !report
+            .warnings
+            .iter()
+            .any(|w| w.contains("not a registered model")),
+        "a join to a cube declared later is valid: {:?}",
+        report.warnings
     );
 }

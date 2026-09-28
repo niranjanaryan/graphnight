@@ -15,6 +15,41 @@ pub enum AggregationType {
 }
 
 impl AggregationType {
+    /// Build an aggregation from user input, rejecting anything that is not a
+    /// plain SQL identifier.
+    ///
+    /// `Custom` interpolates its name straight into the statement as a function
+    /// name, so accepting arbitrary text here would let a request author inject
+    /// SQL. A function name is `[A-Za-z_][A-Za-z0-9_$]*` and nothing else --
+    /// optionally schema-qualified with a dot, which is still only identifiers.
+    /// Anything containing a space, quote, paren or comment marker is refused.
+    pub fn parse_strict(input: &str) -> Result<Self, String> {
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return Err("aggregation must not be empty".to_string());
+        }
+        let upper = trimmed.to_ascii_uppercase();
+        let known = match upper.as_str() {
+            "SUM" => Some(Self::Sum),
+            "AVG" | "AVERAGE" => Some(Self::Avg),
+            "COUNT" => Some(Self::Count),
+            "MIN" => Some(Self::Min),
+            "MAX" => Some(Self::Max),
+            "COUNT_DISTINCT" | "COUNTDISTINCT" => Some(Self::CountDistinct),
+            _ => None,
+        };
+        if let Some(known) = known {
+            return Ok(known);
+        }
+        if !trimmed.split('.').all(is_plain_identifier) {
+            return Err(format!(
+                "{input:?} is not a valid aggregation. Use one of SUM, AVG, COUNT, MIN, \
+                 MAX, COUNT_DISTINCT, or a plain function name such as percentile_cont"
+            ));
+        }
+        Ok(Self::Custom(trimmed.to_string()))
+    }
+
     pub fn sql_function(&self) -> &str {
         match self {
             AggregationType::Sum => "SUM",
@@ -30,6 +65,23 @@ impl AggregationType {
     pub fn needs_closing_paren(&self) -> bool {
         matches!(self, AggregationType::CountDistinct)
     }
+}
+
+/// Whether `part` is a bare SQL identifier: letter or underscore, then
+/// alphanumerics, underscore or `$`. Deliberately strict.
+/// A bare identifier: ASCII letters/digits/underscore, not starting with a digit.
+///
+/// Deliberately narrow. This is the single definition of "safe to pass to a
+/// dialect's `quote_ident`", shared by the aggregation check and the formula
+/// function-call parser, so the two cannot drift into disagreeing about which
+/// names are safe.
+pub(crate) fn is_plain_identifier(part: &str) -> bool {
+    let mut chars = part.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
 impl std::fmt::Display for AggregationType {
@@ -102,11 +154,23 @@ pub enum FilterOperator {
     IsNotNull,
     Between,
     NotBetween,
+    /// Spatial: the row's geometry intersects the supplied geometry.
+    Intersects,
+    /// Spatial: the row's geometry lies within the supplied geometry.
+    Within,
+    /// Spatial: the row's geometry contains the supplied geometry.
+    Contains,
 }
 
 impl FilterOperator {
-    pub fn sql_operator(&self) -> &str {
-        match self {
+    /// The infix SQL operator, or `None` for operators that are not infix.
+    ///
+    /// Returning `None` rather than a placeholder string means a spatial
+    /// operator cannot be rendered as if it were a comparison: the caller is
+    /// forced to deal with it, so `ST_Intersects` can never reach a database
+    /// as a bare infix operator between two values.
+    pub fn sql_operator(&self) -> Option<&str> {
+        Some(match self {
             FilterOperator::Eq => "=",
             FilterOperator::Neq => "!=",
             FilterOperator::Gt => ">",
@@ -121,11 +185,41 @@ impl FilterOperator {
             FilterOperator::IsNotNull => "IS NOT NULL",
             FilterOperator::Between => "BETWEEN",
             FilterOperator::NotBetween => "NOT BETWEEN",
+            FilterOperator::Intersects | FilterOperator::Within | FilterOperator::Contains => {
+                return None
+            }
+        })
+    }
+
+    /// The `ST_*` predicate for a spatial operator.
+    ///
+    /// The names are shared rather than per-dialect because PostGIS and DuckDB
+    /// spatial implement the same functions with the same argument order:
+    /// `f(a, b)` reads as "a relative to b", so the row's geometry is always
+    /// the first argument. Verified against DuckDB rather than assumed —
+    /// `ST_Within(point, polygon)` is true and `ST_Within(polygon, point)` is
+    /// not, and swapping them would have silently inverted every result.
+    ///
+    /// Support itself is gated per dialect by
+    /// [`Dialect::spatial_geometry`][geometry], which returns `None` where
+    /// there is no equivalent.
+    pub fn spatial_function(&self) -> Option<&'static str> {
+        match self {
+            FilterOperator::Intersects => Some("ST_Intersects"),
+            FilterOperator::Within => Some("ST_Within"),
+            FilterOperator::Contains => Some("ST_Contains"),
+            _ => None,
         }
     }
 
+    /// True when the operator takes no value at all.
+    pub fn is_valueless(&self) -> bool {
+        matches!(self, FilterOperator::IsNull | FilterOperator::IsNotNull)
+    }
+
+    /// True when the operator takes a value, which spatial operators do.
     pub fn needs_value(&self) -> bool {
-        !matches!(self, FilterOperator::IsNull | FilterOperator::IsNotNull)
+        !self.is_valueless()
     }
 
     pub fn needs_two_values(&self) -> bool {
@@ -263,6 +357,8 @@ pub struct Filter {
     pub field: String,
     pub operator: FilterOperator,
     pub value: serde_json::Value,
+    /// Join this filter to the previous one with OR instead of AND.
+    #[serde(default)]
     pub or_condition: bool,
 }
 
@@ -289,6 +385,7 @@ impl Filter {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OrderBy {
     pub field: String,
+    #[serde(default)]
     pub descending: bool,
 }
 
@@ -320,10 +417,18 @@ pub struct SourceSpec {
 pub struct Query {
     pub name: Option<String>,
     pub source_model: Option<SourceSpec>,
+    // The collections default to empty so a hand-written query file only has to
+    // state the parts it cares about, instead of every key including empty
+    // lists. This only widens what deserialization accepts.
+    #[serde(default)]
     pub measures: Vec<Measure>,
+    #[serde(default)]
     pub dimensions: Vec<Dimension>,
+    #[serde(default)]
     pub time_dimensions: Vec<TimeDimension>,
+    #[serde(default)]
     pub filters: Vec<Filter>,
+    #[serde(default)]
     pub order: Vec<OrderBy>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,

@@ -17,7 +17,7 @@
 //! alternative — inventing measures — is how a migration ends up trusted and
 //! wrong.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use serde_json::Value;
@@ -449,13 +449,19 @@ pub fn import_cube_str(text: &str, datasource: &str) -> Result<ImportReport> {
 
         let sql_table = cube_sql(&cube.sql_table);
         // GraphNight derives the table name from the model name, so a cube
-        // pointing at a different physical table needs a SQL override. Store
-        // the raw table name and let the generator decide how to wrap it.
-        let sql_override = sql_table;
-        if sql_override.is_some() {
+        // reading a different physical table needs a real SELECT to inline as
+        // its source. A bare table name would land in the FROM clause verbatim
+        // and fail to parse, so wrap it. A cube whose table already matches its
+        // name needs no override at all.
+        let sql_override = match &sql_table {
+            Some(table) if !table.eq_ignore_ascii_case(&model_name) => {
+                Some(format!("SELECT * FROM {}", table))
+            }
+            _ => None,
+        };
+        if sql_table.is_some() && sql_override.is_none() {
             report.warnings.push(format!(
-                "cube '{model_name}': sql_table set to '{}'; the generator will use it as the model's SQL source",
-                sql_override.as_deref().unwrap_or("(none)")
+                "cube '{model_name}': sql_table matches the cube name, so no SQL override was needed"
             ));
         }
 
@@ -472,7 +478,37 @@ pub fn import_cube_str(text: &str, datasource: &str) -> Result<ImportReport> {
         });
     }
 
+    warn_about_dangling_joins(&mut report);
     Ok(report)
+}
+
+/// Report joins whose target is not among the imported models.
+///
+/// A declared join is not a registered one: Cube schemas routinely reference a
+/// cube that lives in another file, and importers run per file, so the target
+/// may genuinely be arriving later. That is why this warns rather than drops
+/// the join — dropping it would silently change the fact grain, which is worse
+/// than a model that will not generate until the join is resolved.
+///
+/// The wording matches the generation-time refusal so an operator meets the
+/// same sentence in the import report and in the query error.
+fn warn_about_dangling_joins(report: &mut ImportReport) {
+    let known: HashSet<&str> = report.models.iter().map(|m| m.name.as_str()).collect();
+    let mut dangling = Vec::new();
+    for model in &report.models {
+        for join in &model.joins {
+            if !known.contains(join.model.as_str()) {
+                dangling.push(format!(
+                    "join target `{}` is not a registered model (reached from `{}`). \
+                     Register the model or remove the join.",
+                    join.model, model.name
+                ));
+            }
+        }
+    }
+    for warning in dangling {
+        report.warn(warning);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -506,6 +542,25 @@ struct DbtConfig {
     materialized: Option<String>,
     #[serde(default)]
     enabled: Option<bool>,
+    /// dbt writes `config: meta: {...}` from a model's schema YAML here, not
+    /// at the node's top level.
+    #[serde(default)]
+    meta: HashMap<String, Value>,
+}
+
+impl DbtNode {
+    /// The `graphnight_measures` block, wherever dbt happened to put it.
+    ///
+    /// `config: meta:` in a model's schema YAML is the documented spelling and
+    /// lands under `config.meta` in the manifest. Some dbt versions and project
+    /// configs also carry a top-level `meta`, so accept that as a fallback
+    /// rather than silently importing a dimensions-only model.
+    fn measures_meta(&self) -> Option<&Value> {
+        self.config
+            .meta
+            .get("graphnight_measures")
+            .or_else(|| self.meta.get("graphnight_measures"))
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -594,8 +649,8 @@ pub fn import_dbt_str(text: &str, datasource: &str) -> Result<ImportReport> {
         if measures.is_empty() {
             report.warn(format!(
                 "{}: imported as dimensions-only. dbt does not define metrics, so add \
-                 `meta: {{graphnight_measures: [...]}}` to the model to get aggregations. \
-                 See docs/migration-dbt.md.",
+                 `config: {{meta: {{graphnight_measures: [...]}}}}` to the model to get \
+                 aggregations. See docs/migration-cube-dbt.md.",
                 node.name
             ));
         }
@@ -620,7 +675,7 @@ pub fn import_dbt_str(text: &str, datasource: &str) -> Result<ImportReport> {
 
 /// Read measures declared in a dbt node's `meta.graphnight_measures`.
 fn dbt_measures(node: &DbtNode, report: &mut ImportReport) -> Vec<Measure> {
-    let Some(Value::Array(items)) = node.meta.get("graphnight_measures") else {
+    let Some(Value::Array(items)) = node.measures_meta() else {
         return Vec::new();
     };
 
