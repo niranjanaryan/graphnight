@@ -21,6 +21,6 @@ serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
-tabled = "0.16"
+tabled = "0.22"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
