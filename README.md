@@ -1,8 +1,8 @@
 # GraphNight
 
-**Status: 1.2.0**
+**Status: 2.0.0**
 
-GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB.
+GraphNight is an embeddable semantic layer for AI agents and humans. Define metrics once, query them through GraphQL or a CLI, and generate dialect-specific SQL for Postgres, MySQL, SQLite, and DuckDB (DuckDB execution supported via the `duckdb` feature).
 
 > **Language Bindings**: [Python (PyPI)](https://pypi.org/project/graphnight/) | [Node.js (npm)](https://www.npmjs.com/package/@graphnight/native)
 
@@ -12,7 +12,7 @@ See [LAUNCH.md](LAUNCH.md) for the full checklist. Remaining gaps (vault secret 
 
 - Semantic models (measures, dimensions, time dimensions, joins)
 - Formula helpers (`sum`, `avg`, `count`, `time_shift`, `ratio`, …)
-- SQL generation for Postgres / MySQL / SQLite / DuckDB
+- SQL generation and execution for Postgres / MySQL / SQLite / DuckDB (DuckDB driver behind the `duckdb` feature, enabled by the server and CLI)
 - GraphQL API on **Axum** + CLI (`graphnight init`, query dry-run, model list)
 - YAML / SQLite / **Postgres** metadata storage (HA shared store) and Tantivy search (Postgres search is ILIKE-only)
 - API keys + **OIDC JWT** auth; `PolicyEnforcer` on the live query path (allow/deny, forced filters, RLS, max rows)
@@ -218,7 +218,7 @@ const result = await client.query({
 const rows = JSON.parse(result.data);
 ```
 
-See [crates/graphnight-node](../crates/graphnight-node) for source and [docs/usage-native.md](docs/usage-native.md) for full documentation.
+See [crates/graphnight-node](crates/graphnight-node) for source and [docs/usage-native.md](docs/usage-native.md) for full documentation.
 
 ### Node.js HTTP Client (@graphnight/client)
 
@@ -239,7 +239,7 @@ const result = await client.query({
 });
 ```
 
-See [node-client](../node-client) for source and [docs/usage-client.md](docs/usage-client.md) for full documentation.
+See [node-client](node-client) for source and [docs/usage-client.md](docs/usage-client.md) for full documentation.
 
 ## Development
 

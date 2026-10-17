@@ -18,7 +18,7 @@ members = [
 exclude = []
 
 [workspace.package]
-version = "1.2.0"
+version = "2.0.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["GraphNight Team"]
@@ -30,9 +30,9 @@ keywords = ["semantic-layer", "graphql", "sql", "analytics", "rust", "bi"]
 readme = "README.md"
 
 [workspace.dependencies]
-# Core data processing - use custom SQL generator, avoid datafusion/parquet issues
+# Core data processing - use a custom SQL generator rather than an engine
+# dependency. GeoParquet will add `arrow`/`parquet` here when that work starts.
 # datafusion = { version = "55", features = ["sql"] }
-arrow = { version = "55", features = [] }
 zstd-safe = "7.2.0"
 tantivy = "0.26"
 futures = "0.3"
@@ -95,6 +95,7 @@ sqlx = { version = "0.8", default-features = false, features = [
     "uuid",
     "json",
     "derive",
+    "rust_decimal",
 ] }
 postgres = { version = "0.11", features = ["with-chrono-0_4"] }
 

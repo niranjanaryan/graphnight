@@ -1,6 +1,6 @@
 # GraphNight docs
 
-Practical guides for GraphNight **1.2.0**. Start with getting started, then pick a surface (CLI, agent/MCP, GraphQL, Python, Node.js) or ops topic (auth, deploy).
+Practical guides for GraphNight **2.0.0**. Start with getting started, then pick a surface (CLI, agent/MCP, GraphQL, Python, Node.js) or ops topic (auth, deploy).
 
 ## Index
 
@@ -18,6 +18,7 @@ Practical guides for GraphNight **1.2.0**. Start with getting started, then pick
 | [usage-client.md](usage-client.md) | `npm install @graphnight/client` — HTTP GraphQL client |
 | [auth.md](auth.md) | API keys, OIDC JWT, PolicyEnforcer, tenant header, `DEV_OPEN` |
 | [deploy.md](deploy.md) | Docker, compose HA profile, reverse-proxy TLS, env cheat sheet |
+| [spatial.md](spatial.md) | Geometry filters and measures, dialect support, what is not supported yet |
 
 ## SDKs
 
@@ -27,7 +28,7 @@ Practical guides for GraphNight **1.2.0**. Start with getting started, then pick
 | **Node.js (Native)** | `@graphnight/native` | `npm install @graphnight/native` | [npm](https://www.npmjs.com/package/@graphnight/native) • [Source](../crates/graphnight-node) |
 | **Node.js (HTTP)** | `@graphnight/client` | `npm install @graphnight/client` | [npm](https://www.npmjs.com/package/@graphnight/client) • [Source](../node-client) |
 | **Rust** | `graphnight-*` crates | `cargo add graphnight-core` | [crates.io](https://crates.io/search?q=graphnight) • [Source](../crates) |
-| **Elixir** | `:graphnight` | `mix deps.add :graphnight` | [Hex](https://hex.pm/packages/graphnight) • [Source](../graphnight-elixir-repo) |
+| **Elixir** | `:graphnight` | `mix deps.add :graphnight` | [Hex](https://hex.pm/packages/graphnight) • [Source](../crates/graphnight-elixir) |
 
 ## Examples in-repo
 
@@ -45,7 +46,8 @@ Practical guides for GraphNight **1.2.0**. Start with getting started, then pick
 
 - [README.md](../README.md) — features and quick start
 - [SECURITY.md](../SECURITY.md) — auth, CORS, secrets, reporting
-- [CHANGELOG.md](../CHANGELOG.md) — 1.2.0 notes and remaining gaps
+- [CHANGELOG.md](../CHANGELOG.md) — 2.0.0 notes and remaining gaps
+- [PLANS.md](../PLANS.md) — in-flight work, open decisions, spatial roadmap
 - [LAUNCH.md](../LAUNCH.md) — OSS vs production checklist
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — longer-term blueprint (many items vision-only)
 
@@ -62,3 +64,8 @@ Practical guides for GraphNight **1.2.0**. Start with getting started, then pick
 | In-process TLS | Not implemented — terminate at a reverse proxy |
 | OIDC browser login UI | JWT bearer validation only |
 | Export back to Cube / dbt | Not implemented — importers are one-way; keep the converted YAML |
+| DuckDB as an execution target | Implemented — behind the `duckdb` feature (bundled); server and CLI enable it |
+| DuckDB schema introspection | Not implemented — write the model explicitly; see [spatial.md](spatial.md) |
+| GeoParquet | Not implemented — no reader or loader; see [spatial.md](spatial.md) |
+| Geometry values in results | Implemented — a geometry column is returned as GeoJSON; see [spatial.md](spatial.md) |
+| Geometry column auto-detection | Implemented — introspection reads `udt_name`; see [spatial.md](spatial.md) |
