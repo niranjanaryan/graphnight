@@ -1,16 +1,32 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use graphnight_core::models::{
     AggregationType, DataSource, Dimension, Filter, FilterOperator, Formula, Measure, Model,
     OrderBy, Query as CoreQuery, SourceSpec, TimeDimension, TimeGranularity,
 };
+use graphnight_runtime::governance::{CallContext, ExecuteOptions, QueryService};
 use graphnight_sql::SqlEngine;
 use graphnight_storage::{Memory, MemoryFilter, StorageBackend, YamlStorage};
-use graphnight_core::errors::StorageError;
+
+/// The call context for an embedded (in-process) client.
+///
+/// There is no server and no credential channel, so the host process is the
+/// identity: it is trusted and unrestricted. What still applies is the
+/// structural governance the service always enforces — model and datasource
+/// resolution, the row cap, column masks and the audit trail.
+fn embedded_context() -> CallContext {
+    CallContext {
+        user_id: Some("embedded".to_string()),
+        tenant_id: None,
+        is_admin: true,
+        auth_required: false,
+        policy: None,
+        principal_label: Some("node".to_string()),
+    }
+}
 
 /// Helper to convert errors to napi::Error
 fn to_napi_error<E: std::fmt::Display>(e: E) -> Error {
@@ -45,7 +61,7 @@ impl From<graphnight_core::errors::StorageError> for GraphNightError {
 /// Query result structure - uses JSON strings for flexible data
 #[napi(object)]
 pub struct QueryResult {
-    pub data: String,  // JSON string of array of objects
+    pub data: String, // JSON string of array of objects
     pub columns: Vec<String>,
     pub sql: String,
     pub execution_time_ms: f64,
@@ -125,8 +141,8 @@ pub struct TimeDimensionInput {
 pub struct FilterInput {
     pub field: String,
     pub operator: String,
-    pub value: Option<String>,  // JSON string
-    pub values: Option<Vec<String>>,  // JSON strings
+    pub value: Option<String>,       // JSON string
+    pub values: Option<Vec<String>>, // JSON strings
     pub or_condition: Option<bool>,
 }
 
@@ -199,7 +215,9 @@ pub struct DataSourceInput {
 /// Main GraphNight client
 #[napi]
 pub struct GraphNightClient {
-    sql_engine: Mutex<SqlEngine>,
+    /// All query execution goes through the service, so an embedded client gets
+    /// the same row cap, column masks and audit trail as the server.
+    service: Arc<QueryService>,
     storage: Arc<dyn StorageBackend + Send + Sync>,
     runtime: tokio::runtime::Runtime,
 }
@@ -213,24 +231,37 @@ impl GraphNightClient {
     #[napi(constructor)]
     pub fn new(storage_path: Option<String>) -> Result<Self> {
         let storage_path = storage_path.unwrap_or_else(|| "./graphnight_data".to_string());
-        
+
         let storage = Arc::new(YamlStorage::new(&storage_path).map_err(to_napi_error)?);
-        
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(to_napi_error)?;
-        
+
+        let runtime = tokio::runtime::Runtime::new().map_err(to_napi_error)?;
+
         runtime.block_on(storage.load()).map_err(to_napi_error)?;
-        
-        let models = runtime.block_on(storage.list_models(None)).map_err(to_napi_error)?;
-        
-        let dialect = graphnight_sql::dialects::get_dialect("postgres");
+
+        let models = runtime
+            .block_on(storage.list_models(None))
+            .map_err(to_napi_error)?;
+
+        let datasources = runtime
+            .block_on(storage.list_datasources())
+            .map_err(to_napi_error)?;
+
+        // Default dialect only covers models pointing at an unregistered
+        // datasource; with_datasources resolves each model to its own driver.
+        let default_driver = datasources
+            .first()
+            .map(|d| d.driver.clone())
+            .unwrap_or_else(|| "postgres".to_string());
+        let dialect = graphnight_sql::dialects::get_dialect(&default_driver);
         let conn_manager = Arc::new(graphnight_sql::executor::ConnectionManager::new());
         let executor = Arc::new(graphnight_sql::executor::QueryExecutor::new(conn_manager));
-        let sql_engine = SqlEngine::new(dialect, executor).map_err(to_napi_error)?
+        let sql_engine = SqlEngine::new(dialect, executor)
+            .map_err(to_napi_error)?
+            .with_datasources(datasources)
             .with_models(models);
 
         Ok(Self {
-            sql_engine: Mutex::new(sql_engine),
+            service: Arc::new(QueryService::new(Arc::new(sql_engine), storage.clone())),
             storage,
             runtime,
         })
@@ -240,52 +271,42 @@ impl GraphNightClient {
     #[napi]
     pub fn query(&self, query: QueryInput) -> Result<QueryResult> {
         let core_query = self.convert_query(query)?;
-        let storage = self.storage.clone();
         let start = std::time::Instant::now();
-
-        let model_name = core_query
-            .name
-            .as_ref()
-            .or_else(|| core_query.source_model.as_ref().map(|s| &s.model))
-            .ok_or_else(|| Error::new(Status::InvalidArg, "Query must have name or source_model"))?
-            .clone();
-
-        let model = self
+        let outcome = self
             .runtime
-            .block_on(storage.get_model(&model_name, None))
-            .map_err(to_napi_error)?
-            .ok_or_else(|| Error::new(Status::InvalidArg, format!("Model not found: {}", model_name)))?;
+            .block_on(self.service.execute(
+                &embedded_context(),
+                core_query,
+                ExecuteOptions::executing(),
+            ))
+            .map_err(to_napi_error)?;
 
-        let datasource = self
-            .runtime
-            .block_on(storage.get_datasource(&model.datasource))
-            .map_err(to_napi_error)?
-            .ok_or_else(|| Error::new(Status::InvalidArg, format!("Datasource not found: {}", model.datasource)))?;
-
-        let engine = self.sql_engine.lock()
-            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
-        let sql = engine.generate_sql(&core_query).map_err(to_napi_error)?;
-        let results = self.runtime.block_on(engine.execute_sqlx(&datasource, &sql)).map_err(to_napi_error)?;
-        drop(engine);
-
-        let columns: Vec<String> = if !results.is_empty() {
-            results[0].keys().cloned().collect()
-        } else {
-            vec![]
-        };
-
-        let data: Vec<HashMap<String, serde_json::Value>> = results
-            .into_iter()
-            .map(|m| m.into_iter().collect())
+        let data: Vec<HashMap<String, serde_json::Value>> = outcome
+            .data
+            .iter()
+            .map(|v| match v {
+                serde_json::Value::Object(m) => {
+                    m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+                }
+                other => {
+                    let mut m = HashMap::new();
+                    m.insert("value".to_string(), other.clone());
+                    m
+                }
+            })
             .collect();
 
-        let data_json = serde_json::to_string(&data)
-            .map_err(|e| Error::new(Status::GenericFailure, format!("Failed to serialize data: {}", e)))?;
+        let data_json = serde_json::to_string(&data).map_err(|e| {
+            Error::new(
+                Status::GenericFailure,
+                format!("Failed to serialize data: {}", e),
+            )
+        })?;
 
         Ok(QueryResult {
             data: data_json,
-            columns,
-            sql,
+            columns: outcome.columns.clone(),
+            sql: outcome.sql.unwrap_or_default(),
             execution_time_ms: start.elapsed().as_millis() as f64,
             row_count: data.len() as u32,
         })
@@ -295,19 +316,21 @@ impl GraphNightClient {
     #[napi]
     pub fn generate_sql(&self, query: QueryInput) -> Result<String> {
         let core_query = self.convert_query(query)?;
-        let engine = self.sql_engine.lock()
-            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
-        Ok(engine.generate_sql(&core_query).map_err(to_napi_error)?)
+        let outcome = self
+            .runtime
+            .block_on(self.service.execute(
+                &embedded_context(),
+                core_query,
+                ExecuteOptions::dry_run(),
+            ))
+            .map_err(to_napi_error)?;
+        Ok(outcome.sql.unwrap_or_default())
     }
 
     /// Dry-run a query: return generated SQL without hitting a DB
     #[napi]
     pub fn dry_run(&self, query: QueryInput) -> Result<QueryResult> {
-        let core_query = self.convert_query(query)?;
-        let engine = self.sql_engine.lock()
-            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
-        let sql = engine.generate_sql(&core_query).map_err(to_napi_error)?;
-        
+        let sql = self.generate_sql(query)?;
         Ok(QueryResult {
             data: "[]".to_string(),
             columns: vec![],
@@ -321,35 +344,60 @@ impl GraphNightClient {
     #[napi]
     pub fn list_models(&self, datasource: Option<String>) -> Result<Vec<ModelSummary>> {
         let storage = self.storage.clone();
-        let models = self.runtime.block_on(async move { 
-            storage.list_models(datasource.as_deref()).await 
-        }).map_err(to_napi_error)?;
-        
-        Ok(models.iter().map(|m| ModelSummary {
-            name: m.name.clone(),
-            datasource: m.datasource.clone(),
-            description: m.description.clone().unwrap_or_default(),
-            measures: m.measures.iter().map(|meas| meas.formula.expression.clone()).collect(),
-            dimensions: m.dimensions.iter().map(|d| d.name.clone()).collect(),
-            time_dimensions: m.time_dimensions.iter().map(|t| t.dimension.clone()).collect(),
-        }).collect())
+        let models = self
+            .runtime
+            .block_on(async move { storage.list_models(datasource.as_deref()).await })
+            .map_err(to_napi_error)?;
+
+        Ok(models
+            .iter()
+            .map(|m| ModelSummary {
+                name: m.name.clone(),
+                datasource: m.datasource.clone(),
+                description: m.description.clone().unwrap_or_default(),
+                measures: m
+                    .measures
+                    .iter()
+                    .map(|meas| meas.formula.expression.clone())
+                    .collect(),
+                dimensions: m.dimensions.iter().map(|d| d.name.clone()).collect(),
+                time_dimensions: m
+                    .time_dimensions
+                    .iter()
+                    .map(|t| t.dimension.clone())
+                    .collect(),
+            })
+            .collect())
     }
 
     /// Get a single model by name
     #[napi]
-    pub fn get_model(&self, name: String, datasource: Option<String>) -> Result<Option<ModelSummary>> {
+    pub fn get_model(
+        &self,
+        name: String,
+        datasource: Option<String>,
+    ) -> Result<Option<ModelSummary>> {
         let storage = self.storage.clone();
-        let model = self.runtime.block_on(async move { 
-            storage.get_model(&name, datasource.as_deref()).await 
-        }).map_err(to_napi_error)?;
-        
+        let model = self
+            .runtime
+            .block_on(async move { storage.get_model(&name, datasource.as_deref()).await })
+            .map_err(to_napi_error)?;
+
         Ok(model.map(|m| ModelSummary {
             name: m.name.clone(),
             datasource: m.datasource.clone(),
             description: m.description.clone().unwrap_or_default(),
-            measures: m.measures.iter().map(|meas| meas.formula.expression.clone()).collect(),
+            measures: m
+                .measures
+                .iter()
+                .map(|meas| meas.formula.expression.clone())
+                .collect(),
             dimensions: m.dimensions.iter().map(|d| d.name.clone()).collect(),
-            time_dimensions: m.time_dimensions.iter().map(|t| t.dimension.clone()).collect(),
+            time_dimensions: m
+                .time_dimensions
+                .iter()
+                .map(|t| t.dimension.clone())
+                .collect(),
         }))
     }
 
@@ -357,26 +405,34 @@ impl GraphNightClient {
     #[napi]
     pub fn create_model(&self, model: ModelInput) -> Result<ModelSummary> {
         let core_model = self.convert_model(model)?;
-        
-        let storage = self.storage.clone();
-        let created = self.runtime.block_on(async move { 
-            storage.create_model(core_model).await 
-        }).map_err(to_napi_error)?;
 
-        // Register model in SQL engine
-        {
-            let mut engine = self.sql_engine.lock()
-                .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
-            engine.register_model(created.clone());
-        }
+        let storage = self.storage.clone();
+        let created = self
+            .runtime
+            .block_on(async move { storage.create_model(core_model).await })
+            .map_err(to_napi_error)?;
+
+        // Register in the SQL engine too, else the new model would be listed
+        // and searchable but fail to generate SQL.
+        self.service
+            .register_model(&embedded_context(), created.clone())
+            .map_err(to_napi_error)?;
 
         Ok(ModelSummary {
             name: created.name,
             datasource: created.datasource,
             description: created.description.unwrap_or_default(),
-            measures: created.measures.iter().map(|meas| meas.formula.expression.clone()).collect(),
+            measures: created
+                .measures
+                .iter()
+                .map(|meas| meas.formula.expression.clone())
+                .collect(),
             dimensions: created.dimensions.iter().map(|d| d.name.clone()).collect(),
-            time_dimensions: created.time_dimensions.iter().map(|t| t.dimension.clone()).collect(),
+            time_dimensions: created
+                .time_dimensions
+                .iter()
+                .map(|t| t.dimension.clone())
+                .collect(),
         })
     }
 
@@ -384,17 +440,21 @@ impl GraphNightClient {
     #[napi]
     pub fn list_datasources(&self) -> Result<Vec<DataSourceSummary>> {
         let storage = self.storage.clone();
-        let datasources = self.runtime.block_on(async move { 
-            storage.list_datasources().await 
-        }).map_err(to_napi_error)?;
-        
-        Ok(datasources.into_iter().map(|d| DataSourceSummary {
-            name: d.name,
-            driver: d.driver,
-            description: d.description.unwrap_or_default(),
-            models: d.models,
-            pool_size: d.pool_size,
-        }).collect())
+        let datasources = self
+            .runtime
+            .block_on(async move { storage.list_datasources().await })
+            .map_err(to_napi_error)?;
+
+        Ok(datasources
+            .into_iter()
+            .map(|d| DataSourceSummary {
+                name: d.name,
+                driver: d.driver,
+                description: d.description.unwrap_or_default(),
+                models: d.models,
+                pool_size: d.pool_size,
+            })
+            .collect())
     }
 
     /// Create a new datasource
@@ -411,9 +471,10 @@ impl GraphNightClient {
         };
 
         let storage = self.storage.clone();
-        let created = self.runtime.block_on(async move { 
-            storage.create_datasource(core_ds).await 
-        }).map_err(to_napi_error)?;
+        let created = self
+            .runtime
+            .block_on(async move { storage.create_datasource(core_ds).await })
+            .map_err(to_napi_error)?;
 
         Ok(DataSourceSummary {
             name: created.name,
@@ -428,17 +489,21 @@ impl GraphNightClient {
     #[napi]
     pub fn search(&self, query: String, limit: Option<u32>) -> Result<Vec<SearchResult>> {
         let storage = self.storage.clone();
-        let results = self.runtime.block_on(async move { 
-            storage.search(&query, limit.unwrap_or(10) as usize).await 
-        }).map_err(to_napi_error)?;
+        let results = self
+            .runtime
+            .block_on(async move { storage.search(&query, limit.unwrap_or(10) as usize).await })
+            .map_err(to_napi_error)?;
 
-        Ok(results.into_iter().map(|r| SearchResult {
-            model_name: r.model_name,
-            datasource: r.datasource,
-            score: r.score as f64,
-            matched_fields: r.matched_fields,
-            snippet: r.snippet,
-        }).collect())
+        Ok(results
+            .into_iter()
+            .map(|r| SearchResult {
+                model_name: r.model_name,
+                datasource: r.datasource,
+                score: r.score as f64,
+                matched_fields: r.matched_fields,
+                snippet: r.snippet,
+            })
+            .collect())
     }
 
     /// Save a memory item
@@ -460,10 +525,11 @@ impl GraphNightClient {
             updated_at: chrono::Utc::now(),
             meta: HashMap::new(),
         };
-        
-        let saved = self.runtime.block_on(async move { 
-            storage.save_memory(memory).await 
-        }).map_err(to_napi_error)?;
+
+        let saved = self
+            .runtime
+            .block_on(async move { storage.save_memory(memory).await })
+            .map_err(to_napi_error)?;
 
         Ok(MemoryItem {
             id: saved.id,
@@ -491,28 +557,33 @@ impl GraphNightClient {
             limit: limit.map(|l| l as usize),
             offset: offset.map(|o| o as usize),
         };
-        
-        let memories = self.runtime.block_on(async move { 
-            storage.list_memories(filter).await 
-        }).map_err(to_napi_error)?;
 
-        Ok(memories.into_iter().map(|m| MemoryItem {
-            id: m.id,
-            learning: m.learning,
-            linked_entities: m.linked_entities,
-            description: m.description,
-            created_at: m.created_at.to_rfc3339(),
-            updated_at: m.updated_at.to_rfc3339(),
-        }).collect())
+        let memories = self
+            .runtime
+            .block_on(async move { storage.list_memories(filter).await })
+            .map_err(to_napi_error)?;
+
+        Ok(memories
+            .into_iter()
+            .map(|m| MemoryItem {
+                id: m.id,
+                learning: m.learning,
+                linked_entities: m.linked_entities,
+                description: m.description,
+                created_at: m.created_at.to_rfc3339(),
+                updated_at: m.updated_at.to_rfc3339(),
+            })
+            .collect())
     }
 
     /// Delete a memory by ID
     #[napi]
     pub fn delete_memory(&self, id: String) -> Result<bool> {
         let storage = self.storage.clone();
-        let success = self.runtime.block_on(async move { 
-            storage.delete_memory(&id).await 
-        }).map_err(to_napi_error)?;
+        let success = self
+            .runtime
+            .block_on(async move { storage.delete_memory(&id).await })
+            .map_err(to_napi_error)?;
         Ok(success)
     }
 }
@@ -531,43 +602,68 @@ impl GraphNightClient {
             });
         }
 
-        query.measures = input.measures.into_iter().map(|m| Measure {
-            formula: Formula {
-                expression: m.formula.expression,
-                label: m.formula.label,
-                format: m.formula.format,
-            },
-            aggregation: parse_aggregation(&m.aggregation),
-        }).collect();
+        query.measures = input
+            .measures
+            .into_iter()
+            .map(|m| Measure {
+                formula: Formula {
+                    expression: m.formula.expression,
+                    label: m.formula.label,
+                    format: m.formula.format,
+                },
+                aggregation: parse_aggregation(&m.aggregation),
+            })
+            .collect();
 
-        query.dimensions = input.dimensions.into_iter().map(|d| Dimension {
-            name: d.name,
-            label: d.label,
-        }).collect();
+        query.dimensions = input
+            .dimensions
+            .into_iter()
+            .map(|d| Dimension {
+                name: d.name,
+                label: d.label,
+            })
+            .collect();
 
-        query.time_dimensions = input.time_dimensions.into_iter().map(|t| TimeDimension {
-            dimension: t.dimension,
-            granularity: parse_granularity(&t.granularity),
-            label: t.label,
-        }).collect();
+        query.time_dimensions = input
+            .time_dimensions
+            .into_iter()
+            .map(|t| TimeDimension {
+                dimension: t.dimension,
+                granularity: parse_granularity(&t.granularity),
+                label: t.label,
+            })
+            .collect();
 
-        query.filters = input.filters.into_iter().map(|f| {
-            let value = f.value
-                .and_then(|v| serde_json::from_str(&v).ok())
-                .unwrap_or(serde_json::Value::Null);
-            
-            Filter {
-                field: f.field,
-                operator: parse_filter_operator(&f.operator),
-                value,
-                or_condition: f.or_condition.unwrap_or(false),
-            }
-        }).collect();
+        query.filters = input
+            .filters
+            .into_iter()
+            .map(|f| {
+                let value = f
+                    .value
+                    .and_then(|v| serde_json::from_str(&v).ok())
+                    .unwrap_or(serde_json::Value::Null);
 
-        query.order = input.order.into_iter().map(|o| OrderBy {
-            field: o.field,
-            descending: o.descending.unwrap_or(false),
-        }).collect();
+                // A bad operator is an error here, not a silent `Eq`: a typo
+                // would otherwise become `field = 'text'`, which matches nothing
+                // and reports no failure.
+                let operator = parse_filter_operator(&f.operator)?;
+                Ok(Filter {
+                    field: f.field,
+                    operator,
+                    value,
+                    or_condition: f.or_condition.unwrap_or(false),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        query.order = input
+            .order
+            .into_iter()
+            .map(|o| OrderBy {
+                field: o.field,
+                descending: o.descending.unwrap_or(false),
+            })
+            .collect();
 
         query.limit = input.limit.map(|l| l as usize);
         query.offset = input.offset.map(|o| o as usize);
@@ -578,33 +674,49 @@ impl GraphNightClient {
     }
 
     fn convert_model(&self, input: ModelInput) -> Result<Model> {
-        let measures = input.measures.into_iter().map(|m| Measure {
-            formula: Formula {
-                expression: m.formula.expression,
-                label: m.formula.label,
-                format: m.formula.format,
-            },
-            aggregation: parse_aggregation(&m.aggregation),
-        }).collect();
+        let measures = input
+            .measures
+            .into_iter()
+            .map(|m| Measure {
+                formula: Formula {
+                    expression: m.formula.expression,
+                    label: m.formula.label,
+                    format: m.formula.format,
+                },
+                aggregation: parse_aggregation(&m.aggregation),
+            })
+            .collect();
 
-        let dimensions = input.dimensions.into_iter().map(|d| Dimension {
-            name: d.name,
-            label: d.label,
-        }).collect();
+        let dimensions = input
+            .dimensions
+            .into_iter()
+            .map(|d| Dimension {
+                name: d.name,
+                label: d.label,
+            })
+            .collect();
 
-        let time_dimensions = input.time_dimensions.into_iter().map(|t| TimeDimension {
-            dimension: t.dimension,
-            granularity: parse_granularity(&t.granularity),
-            label: t.label,
-        }).collect();
+        let time_dimensions = input
+            .time_dimensions
+            .into_iter()
+            .map(|t| TimeDimension {
+                dimension: t.dimension,
+                granularity: parse_granularity(&t.granularity),
+                label: t.label,
+            })
+            .collect();
 
-        let joins = input.joins.into_iter().map(|j| graphnight_core::models::Join {
-            name: j.name,
-            model: j.model,
-            join_type: parse_join_type(&j.join_type),
-            on: j.on.into_iter().map(|o| (o.left, o.right)).collect(),
-            alias: j.alias,
-        }).collect();
+        let joins = input
+            .joins
+            .into_iter()
+            .map(|j| graphnight_core::models::Join {
+                name: j.name,
+                model: j.model,
+                join_type: parse_join_type(&j.join_type),
+                on: j.on.into_iter().map(|o| (o.left, o.right)).collect(),
+                alias: j.alias,
+            })
+            .collect();
 
         Ok(Model {
             name: input.name,
@@ -646,24 +758,11 @@ fn parse_granularity(s: &str) -> TimeGranularity {
     }
 }
 
-fn parse_filter_operator(s: &str) -> FilterOperator {
-    match s.to_lowercase().as_str() {
-        "eq" => FilterOperator::Eq,
-        "neq" => FilterOperator::Neq,
-        "gt" => FilterOperator::Gt,
-        "gte" => FilterOperator::Gte,
-        "lt" => FilterOperator::Lt,
-        "lte" => FilterOperator::Lte,
-        "like" => FilterOperator::Like,
-        "ilike" => FilterOperator::ILike,
-        "in" => FilterOperator::In,
-        "not_in" => FilterOperator::NotIn,
-        "is_null" => FilterOperator::IsNull,
-        "is_not_null" => FilterOperator::IsNotNull,
-        "between" => FilterOperator::Between,
-        "not_between" => FilterOperator::NotBetween,
-        _ => FilterOperator::Eq,
-    }
+fn parse_filter_operator(s: &str) -> Result<FilterOperator> {
+    // Strict: an unrecognised operator is an error rather than a silent `Eq`,
+    // so a typo reports itself instead of returning no rows. The accepted set
+    // lives in `FilterOperator::parse_strict`, shared with every other surface.
+    FilterOperator::parse_strict(s).map_err(|e| Error::new(Status::GenericFailure, e))
 }
 
 fn parse_join_type(s: &str) -> graphnight_core::models::JoinType {

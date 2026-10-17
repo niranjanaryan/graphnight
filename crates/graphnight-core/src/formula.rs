@@ -1,4 +1,6 @@
-use crate::models::{AggregationType, FilterOperator, Formula, Measure, TimeGranularity};
+use crate::models::{
+    is_plain_identifier, AggregationType, FilterOperator, Formula, Measure, TimeGranularity,
+};
 use anyhow::{anyhow, Result};
 use regex::Regex;
 use std::collections::HashMap;
@@ -14,7 +16,7 @@ pub struct FormulaParser {
 impl FormulaParser {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            agg_regex: Regex::new(r"^(\w+):(\w+)$")?,
+            agg_regex: Regex::new(r"^([\w*]+):(\w+)$")?,
             time_shift_regex: Regex::new(r"time_shift\(([^,]+),\s*(-?\d+),\s*'(\w+)'\)")?,
             ratio_regex: Regex::new(r"ratio\(([^,]+),\s*([^)]+)\)")?,
         })
@@ -127,24 +129,12 @@ impl FormulaParser {
     }
 
     /// Parse filter operator
+    ///
+    /// Delegates to [`FilterOperator::parse_strict`] so the core parser and the
+    /// bindings that used to be lenient share one definition of what an
+    /// operator may be.
     pub fn parse_operator(&self, s: &str) -> Result<FilterOperator> {
-        match s.to_lowercase().as_str() {
-            "eq" | "=" | "==" => Ok(FilterOperator::Eq),
-            "neq" | "!=" | "<>" => Ok(FilterOperator::Neq),
-            "gt" | ">" => Ok(FilterOperator::Gt),
-            "gte" | ">=" => Ok(FilterOperator::Gte),
-            "lt" | "<" => Ok(FilterOperator::Lt),
-            "lte" | "<=" => Ok(FilterOperator::Lte),
-            "like" => Ok(FilterOperator::Like),
-            "ilike" => Ok(FilterOperator::ILike),
-            "in" => Ok(FilterOperator::In),
-            "not_in" | "nin" => Ok(FilterOperator::NotIn),
-            "is_null" | "isnull" => Ok(FilterOperator::IsNull),
-            "is_not_null" | "isnotnull" => Ok(FilterOperator::IsNotNull),
-            "between" => Ok(FilterOperator::Between),
-            "not_between" => Ok(FilterOperator::NotBetween),
-            other => Err(anyhow!("Unknown filter operator: {}", other)),
-        }
+        FilterOperator::parse_strict(s).map_err(anyhow::Error::msg)
     }
 }
 
@@ -196,4 +186,238 @@ impl Default for FormulaRegistry {
     fn default() -> Self {
         Self::new().expect("Failed to create FormulaRegistry")
     }
+}
+
+/// An argument to an allowlisted formula function.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FunctionArg {
+    /// A column reference, optionally qualified with a table or model alias.
+    Column(String),
+    /// A numeric literal, kept as its original text.
+    ///
+    /// The text is validated against a strict numeric pattern and re-emitted
+    /// verbatim. Round-tripping through `f64` would risk turning a long
+    /// coordinate or a high-precision scale factor into different digits, which
+    /// is a correctness problem for exactly the geospatial values this exists
+    /// to serve.
+    Number(String),
+}
+
+/// A single-level call to an allowlisted function.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionCall {
+    pub name: String,
+    pub args: Vec<FunctionArg>,
+}
+
+/// Functions a measure expression may call.
+///
+/// This is an allowlist, not a blocklist, matching the stance already taken for
+/// aggregations: an unrecognised name is refused rather than passed to the
+/// database. A blocklist cannot be made safe here, because the expression
+/// becomes SQL and a blocklist has to anticipate every dangerous construction
+/// rather than only admit known-good ones.
+///
+/// Every entry must be deterministic and side-effect free. Nothing that writes,
+/// mutates, or reaches outside the query belongs here.
+const ALLOWED_FUNCTIONS: &[&str] = &[
+    // String
+    "lower",
+    "upper",
+    "length",
+    "char_length",
+    "trim",
+    "btrim",
+    "ltrim",
+    "rtrim",
+    "substring",
+    "substr",
+    "replace",
+    "concat",
+    "left",
+    "right",
+    // Numeric
+    "abs",
+    "round",
+    "ceil",
+    "ceiling",
+    "floor",
+    "trunc",
+    "sqrt",
+    "power",
+    "pow",
+    "sign",
+    "mod",
+    "greatest",
+    "least",
+    // Date / time
+    "date_trunc",
+    "extract",
+    "date_part",
+    "to_char",
+    "age",
+    // Spatial: deterministic scalar functions
+    "st_area",
+    "st_perimeter",
+    "st_length",
+    "st_npoints",
+    "st_numgeometries",
+    "st_numinteriorrings",
+    "st_geometrytype",
+    "st_srid",
+    "st_isvalid",
+    "st_isempty",
+    "st_ismalformed",
+    "st_dimension",
+    "st_zmflag",
+    "st_x",
+    "st_y",
+    "st_z",
+    "st_m",
+    "st_xmin",
+    "st_xmax",
+    "st_ymin",
+    "st_ymax",
+    "st_mindim",
+    "st_maxdim",
+    "st_envelope",
+    "st_expand",
+    "st_buffer",
+    "st_simplify",
+    "st_transform",
+    "st_astext",
+    "st_aswkt",
+    "st_asbinary",
+    "st_asgml",
+    "st_asgeojson",
+    "st_geohash",
+    "st_point",
+    "st_makepoint",
+    "st_centroid",
+    "st_contains",
+    "st_within",
+    "st_intersects",
+    "st_disjoint",
+    "st_touches",
+    "st_overlaps",
+    "st_crosses",
+    "st_equals",
+    "st_dwithin",
+    "st_distance",
+    "st_distancesphere",
+    "st_distancewithin",
+    "st_hausdorffdistance",
+    "st_lineintersects",
+    "st_linelocatepoint",
+    "st_linelength",
+    "st_azimuth",
+    "st_boundingbox",
+    "st_remap",
+];
+
+/// True when `name` is a function a measure expression may call.
+pub fn is_allowed_function(name: &str) -> bool {
+    ALLOWED_FUNCTIONS
+        .iter()
+        .any(|f| f.eq_ignore_ascii_case(name))
+}
+
+/// Whether `expr` has the shape of a function call, i.e. it names a function
+/// and opens a parenthesis.
+///
+/// Used to decide whether an expression containing `(` is a call that must be
+/// parsed or a bare column name that must be quoted. Getting this wrong in one
+/// direction mangles a call into an identifier; in the other it refuses a
+/// column whose name happens to contain a parenthesis.
+fn looks_like_function_call(expr: &str) -> bool {
+    match expr.find('(') {
+        Some(open) => {
+            let name = expr[..open].trim();
+            !name.is_empty() && name.split('.').all(is_plain_identifier) && !name.contains(' ')
+        }
+        None => false,
+    }
+}
+
+/// A strict numeric literal: optional sign, digits with optional fraction and
+/// optional exponent. No hex, no `inf`, no `nan`, no arithmetic.
+fn is_numeric_literal(s: &str) -> bool {
+    let body = s.strip_prefix(['+', '-']).unwrap_or(s);
+    let (mantissa, exponent) = match body.find(['e', 'E']) {
+        Some(idx) => (&body[..idx], Some(&body[idx + 1..])),
+        None => (body, None),
+    };
+    let mut mantissa = mantissa.split('.');
+    let int_part = mantissa.next().unwrap_or("");
+    let frac_part = mantissa.next().unwrap_or("");
+    if mantissa.next().is_some() {
+        return false;
+    }
+    let digits_ok = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    if !digits_ok(int_part) || !(frac_part.is_empty() || digits_ok(frac_part)) {
+        return false;
+    }
+    match exponent {
+        None => true,
+        Some(e) => {
+            let e = e.strip_prefix(['+', '-']).unwrap_or(e);
+            digits_ok(e)
+        }
+    }
+}
+
+/// Parse a measure expression as a call to an allowlisted function.
+///
+/// Returns `Ok(None)` when the expression is not a function call at all, so
+/// the caller can fall back to treating it as a column name. An expression that
+/// *does* look like a call but cannot be honoured is an error rather than a
+/// silent fallback: quoting `ST_Distance(a, b)` as an identifier produces SQL
+/// that fails far from the model that caused it, and "unknown function" is a
+/// far better message than `column "ST_Distance(a, b)" does not exist`.
+///
+/// Only single-level calls are supported. Nesting, string literals, operators
+/// and subqueries are refused, which keeps the set of things this can produce
+/// small enough to reason about.
+pub fn parse_function_call(expr: &str) -> Result<Option<FunctionCall>, String> {
+    let expr = expr.trim();
+    if !looks_like_function_call(expr) {
+        return Ok(None);
+    }
+    let open = expr.find('(').expect("checked by looks_like_function_call");
+    let name = expr[..open].trim().to_string();
+    let body = &expr[open + 1..];
+    let close = body
+        .rfind(')')
+        .ok_or_else(|| format!("unclosed '(' in function call '{expr}'"))?;
+    let args_src = &body[..close];
+    if !body[close + 1..].trim().is_empty() {
+        return Err(format!("trailing text after ')' in function call '{expr}'"));
+    }
+    if !is_allowed_function(&name) {
+        return Err(format!(
+            "'{name}' is not an allowed function. Allowed functions are a fixed list; \
+             see the GraphNight docs for how to add one."
+        ));
+    }
+
+    let mut args = Vec::new();
+    if !args_src.trim().is_empty() {
+        for raw in args_src.split(',') {
+            let part = raw.trim();
+            if part.is_empty() {
+                return Err(format!("empty argument in function call '{expr}'"));
+            }
+            if is_numeric_literal(part) {
+                args.push(FunctionArg::Number(part.to_string()));
+            } else if part.split('.').count() <= 2 && part.split('.').all(is_plain_identifier) {
+                args.push(FunctionArg::Column(part.to_string()));
+            } else {
+                return Err(format!(
+                    "argument '{part}' in '{expr}' is not a column reference or a number. \
+                     Nested calls, string literals, operators and subqueries are not supported."
+                ));
+            }
+        }
+    }
+    Ok(Some(FunctionCall { name, args }))
 }

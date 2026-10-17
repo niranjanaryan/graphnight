@@ -110,27 +110,11 @@ fn parse_granularity(s: &str) -> TimeGranularity {
     }
 }
 
-fn parse_filter_operator(s: &str) -> FilterOperator {
-    match s.to_lowercase().as_str() {
-        "eq" => FilterOperator::Eq,
-        "neq" => FilterOperator::Neq,
-        "gt" => FilterOperator::Gt,
-        "gte" => FilterOperator::Gte,
-        "lt" => FilterOperator::Lt,
-        "lte" => FilterOperator::Lte,
-        "like" => FilterOperator::Like,
-        "ilike" => FilterOperator::ILike,
-        "in" => FilterOperator::In,
-        "not_in" => FilterOperator::NotIn,
-        "is_null" => FilterOperator::IsNull,
-        "is_not_null" => FilterOperator::IsNotNull,
-        "between" => FilterOperator::Between,
-        "not_between" => FilterOperator::NotBetween,
-        "intersects" => FilterOperator::Intersects,
-        "within" => FilterOperator::Within,
-        "contains" => FilterOperator::Contains,
-        _ => FilterOperator::Eq,
-    }
+fn parse_filter_operator(s: &str) -> anyhow::Result<FilterOperator> {
+    // Strict: an unknown operator is an error rather than a silent `Eq`, so a
+    // typo reports itself instead of quietly returning no rows. The accepted
+    // set lives in `FilterOperator::parse_strict`, shared with every surface.
+    FilterOperator::parse_strict(s).map_err(anyhow::Error::msg)
 }
 
 /// Accept formula as a string or `{"expression", "label?", "format?"}`.
@@ -838,7 +822,7 @@ impl GraphNightClient {
 
                         query.filters.push(Filter {
                             field,
-                            operator: parse_filter_operator(&operator),
+                            operator: parse_filter_operator(&operator)?,
                             value,
                             or_condition,
                         });

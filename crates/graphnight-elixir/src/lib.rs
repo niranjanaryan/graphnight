@@ -107,6 +107,9 @@ mod atoms {
         is_not_null,
         between,
         not_between,
+        intersects,
+        within,
+        contains,
         inner,
         left,
         right,
@@ -253,24 +256,11 @@ fn parse_granularity(s: &str) -> TimeGranularity {
     }
 }
 
-fn parse_operator(s: &str) -> FilterOperator {
-    match s.to_uppercase().as_str() {
-        "EQ" => FilterOperator::Eq,
-        "NEQ" => FilterOperator::Neq,
-        "GT" => FilterOperator::Gt,
-        "GTE" => FilterOperator::Gte,
-        "LT" => FilterOperator::Lt,
-        "LTE" => FilterOperator::Lte,
-        "LIKE" => FilterOperator::Like,
-        "ILIKE" => FilterOperator::ILike,
-        "IN" => FilterOperator::In,
-        "NOT_IN" => FilterOperator::NotIn,
-        "IS_NULL" => FilterOperator::IsNull,
-        "IS_NOT_NULL" => FilterOperator::IsNotNull,
-        "BETWEEN" => FilterOperator::Between,
-        "NOT_BETWEEN" => FilterOperator::NotBetween,
-        _ => FilterOperator::Eq,
-    }
+fn parse_operator(s: &str) -> Result<FilterOperator, String> {
+    // Strict: an unrecognised operator is an error rather than a silent `Eq`,
+    // so a typo reports itself instead of returning no rows. The accepted set
+    // lives in `FilterOperator::parse_strict`, shared with every other surface.
+    FilterOperator::parse_strict(s)
 }
 
 fn parse_join_type(s: &str) -> JoinType {
@@ -339,8 +329,24 @@ fn elixir_ds_to_core(ds: ElixirDataSource) -> DataSource {
     }
 }
 
-fn elixir_query_to_core(q: ElixirQuery) -> CoreQuery {
-    CoreQuery {
+fn elixir_query_to_core(q: ElixirQuery) -> Result<CoreQuery, String> {
+    let filters = q
+        .filters
+        .into_iter()
+        .map(|f| {
+            // A bad operator is an error, not a silent `Eq`: a typo would
+            // otherwise become `field = 'text'`, matching nothing with no
+            // failure reported.
+            let operator = parse_operator(&f.operator)?;
+            let mut filter = Filter::new(f.field, operator, serde_json::Value::from(f.value));
+            if f.or_condition {
+                filter = filter.or();
+            }
+            Ok(filter)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    Ok(CoreQuery {
         name: q.name,
         source_model: q.source_model.map(|s| SourceSpec {
             model: s.model,
@@ -370,21 +376,7 @@ fn elixir_query_to_core(q: ElixirQuery) -> CoreQuery {
                     .with_label(t.label.unwrap_or_default())
             })
             .collect(),
-        filters: q
-            .filters
-            .into_iter()
-            .map(|f| {
-                let mut filter = Filter::new(
-                    f.field,
-                    parse_operator(&f.operator),
-                    serde_json::Value::from(f.value),
-                );
-                if f.or_condition {
-                    filter = filter.or();
-                }
-                filter
-            })
-            .collect(),
+        filters,
         order: q
             .order
             .into_iter()
@@ -395,7 +387,7 @@ fn elixir_query_to_core(q: ElixirQuery) -> CoreQuery {
         whole_periods_only: q.whole_periods_only,
         distinct_dimension_values: q.distinct_dimension_values,
         stage_ref: q.stage_ref,
-    }
+    })
 }
 
 fn core_model_to_elixir(m: Model) -> ElixirModel {
@@ -682,7 +674,7 @@ fn nif_execute_query_impl(
     query: ElixirQuery,
     dry_run: bool,
 ) -> NifResult<ElixirQueryResult> {
-    let core_query = elixir_query_to_core(query);
+    let core_query = elixir_query_to_core(query).map_err(|e| Error::Term(Box::new(e)))?;
     let start = std::time::Instant::now();
 
     let model_name = core_query

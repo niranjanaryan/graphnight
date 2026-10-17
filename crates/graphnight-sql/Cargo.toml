@@ -7,10 +7,17 @@ authors = { workspace = true }
 
 [dependencies]
 graphnight-core = { path = "../graphnight-core" }
-# datafusion = { workspace = true }
-arrow = { workspace = true }
-# parquet = { workspace = true }
 sqlx = { workspace = true }
+# Embedded analytical engine, opt-in. `bundled` compiles DuckDB from source and
+# is heavy (a large C++ amalgamation); the feature exists so a consumer that does
+# not need DuckDB does not pay for it, while the server and CLI enable it.
+duckdb = { version = "1", default-features = false, features = [
+    "bundled",
+    "chrono",
+    "serde_json",
+    "rust_decimal",
+], optional = true }
+rust_decimal = "1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -29,6 +36,8 @@ regex = { workspace = true }
 async-stream = { workspace = true }
 
 [dev-dependencies]
+sqlx = { workspace = true }
+tracing-subscriber = { workspace = true }
 pretty_assertions = { workspace = true }
 graphnight-storage = { path = "../graphnight-storage" }
 tokio = { workspace = true }
@@ -37,3 +46,13 @@ criterion = { workspace = true }
 [[bench]]
 name = "sql_generate"
 harness = false
+
+[[bench]]
+name = "policy_enforce"
+harness = false
+
+[features]
+default = []
+# Execute queries against DuckDB. Off by default because `bundled` pulls a large
+# C++ build into every consumer; enabled by the server and CLI binaries.
+duckdb = ["dep:duckdb"]

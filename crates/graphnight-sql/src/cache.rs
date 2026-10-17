@@ -7,11 +7,9 @@ use std::time::{Duration, Instant};
 
 use graphnight_core::models::{AggregationType, FilterOperator, Query, TimeGranularity};
 
-
-
 /// In-memory LRU cache for generated SQL plans.
 pub struct PlanCache {
-    inner: Mutex<LruCache<u64, String>>,
+    inner: Mutex<LruCache<u64, crate::generator::GeneratedSql>>,
     hits: AtomicU64,
     misses: AtomicU64,
 }
@@ -26,7 +24,7 @@ impl PlanCache {
         }
     }
 
-    pub fn get(&self, key: u64) -> Option<String> {
+    pub fn get(&self, key: u64) -> Option<crate::generator::GeneratedSql> {
         let mut guard = self.inner.lock();
         if let Some(sql) = guard.get(&key) {
             self.hits.fetch_add(1, Ordering::Relaxed);
@@ -37,7 +35,7 @@ impl PlanCache {
         }
     }
 
-    pub fn insert(&self, key: u64, sql: String) {
+    pub fn insert(&self, key: u64, sql: crate::generator::GeneratedSql) {
         self.inner.lock().put(key, sql);
     }
 
@@ -203,14 +201,20 @@ impl std::hash::Hasher for FxHasher {
 pub fn canonical_query_bytes(query: &Query) -> Vec<u8> {
     let mut buf = Vec::with_capacity(256);
     write_opt(&mut buf, query.name.as_deref());
-    write_opt(&mut buf, query.source_model.as_ref().map(|s| s.model.as_str()));
+    write_opt(
+        &mut buf,
+        query.source_model.as_ref().map(|s| s.model.as_str()),
+    );
     write_opt(
         &mut buf,
         query.source_model.as_ref().and_then(|s| s.alias.as_deref()),
     );
     write_opt(
         &mut buf,
-        query.source_model.as_ref().and_then(|s| s.datasource.as_deref()),
+        query
+            .source_model
+            .as_ref()
+            .and_then(|s| s.datasource.as_deref()),
     );
     for m in &query.measures {
         write_str(&mut buf, &m.formula.expression);
@@ -245,7 +249,10 @@ pub fn canonical_query_bytes(query: &Query) -> Vec<u8> {
     );
     write_opt(
         &mut buf,
-        query.distinct_dimension_values.map(|b| b.to_string()).as_deref(),
+        query
+            .distinct_dimension_values
+            .map(|b| b.to_string())
+            .as_deref(),
     );
     write_opt(&mut buf, query.stage_ref.as_deref());
     buf
@@ -312,5 +319,11 @@ fn op_name(o: &FilterOperator) -> &'static str {
         FilterOperator::IsNotNull => "is_not_null",
         FilterOperator::Between => "between",
         FilterOperator::NotBetween => "not_between",
+        // Distinct names, not a shared "spatial": two filters on the same
+        // column with different predicates are different questions, and a
+        // shared key would serve one result for the other.
+        FilterOperator::Intersects => "intersects",
+        FilterOperator::Within => "within",
+        FilterOperator::Contains => "contains",
     }
 }

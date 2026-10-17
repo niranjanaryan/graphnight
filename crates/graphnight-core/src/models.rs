@@ -225,6 +225,49 @@ impl FilterOperator {
     pub fn needs_two_values(&self) -> bool {
         matches!(self, FilterOperator::Between | FilterOperator::NotBetween)
     }
+
+    /// Build a filter operator from user input, rejecting anything unknown.
+    ///
+    /// This is the single definition every surface parses through: the core
+    /// formula parser, the REST handler, and the Node, Python and Elixir
+    /// bindings. All of them used to fall through to `Eq` on an unrecognised
+    /// spelling, which turned a typo such as `intresects` into an equality
+    /// comparison between a geometry column and text — a query that returns no
+    /// rows and reports no error, so the mistake surfaces as "the filter doesn't
+    /// work" rather than as a bad operator.
+    ///
+    /// Accepts the canonical snake_case names and the common symbolic spellings,
+    /// case-insensitively. Anything else is an error naming the input and
+    /// listing what is understood.
+    pub fn parse_strict(input: &str) -> Result<Self, String> {
+        let op = match input.trim().to_ascii_lowercase().as_str() {
+            "eq" | "=" | "==" => FilterOperator::Eq,
+            "neq" | "!=" | "<>" => FilterOperator::Neq,
+            "gt" | ">" => FilterOperator::Gt,
+            "gte" | ">=" => FilterOperator::Gte,
+            "lt" | "<" => FilterOperator::Lt,
+            "lte" | "<=" => FilterOperator::Lte,
+            "like" => FilterOperator::Like,
+            "ilike" => FilterOperator::ILike,
+            "in" => FilterOperator::In,
+            "not_in" | "nin" => FilterOperator::NotIn,
+            "is_null" | "isnull" => FilterOperator::IsNull,
+            "is_not_null" | "isnotnull" => FilterOperator::IsNotNull,
+            "between" => FilterOperator::Between,
+            "not_between" => FilterOperator::NotBetween,
+            "intersects" => FilterOperator::Intersects,
+            "within" => FilterOperator::Within,
+            "contains" => FilterOperator::Contains,
+            _ => {
+                return Err(format!(
+                    "{input:?} is not a valid filter operator. Use one of: eq, neq, gt, gte, \
+                     lt, lte, like, ilike, in, not_in, is_null, is_not_null, between, \
+                     not_between, intersects, within, contains"
+                ))
+            }
+        };
+        Ok(op)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -500,6 +543,56 @@ pub struct Model {
     pub joins: Vec<Join>,
     pub sql: Option<String>, // Custom SQL override
     pub meta: HashMap<String, serde_json::Value>,
+}
+
+impl Model {
+    /// Key under which a model records which of its columns are geometry.
+    ///
+    /// A geometry column is not otherwise distinguishable from any other
+    /// dimension: its type would be `USER-DEFINED` in `information_schema`, and
+    /// `Dimension` carries only a name and a label. The set is kept in `meta`
+    /// rather than as a new typed field so existing model files and the wire
+    /// formats stay unchanged — a model without the key simply has no known
+    /// geometry columns.
+    pub const GEOMETRY_COLUMNS_META_KEY: &'static str = "graphnight_geometry_columns";
+
+    /// The columns declared as geometry, if any.
+    pub fn geometry_columns(&self) -> Vec<String> {
+        self.meta
+            .get(Self::GEOMETRY_COLUMNS_META_KEY)
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// True when `column` is declared as a geometry column on this model.
+    pub fn is_geometry_column(&self, column: &str) -> bool {
+        self.meta
+            .get(Self::GEOMETRY_COLUMNS_META_KEY)
+            .and_then(|v| v.as_array())
+            .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some(column)))
+    }
+
+    /// Record `column` as a geometry column, replacing any existing entry.
+    ///
+    /// The list is sorted and de-duplicated so the serialized model is stable
+    /// regardless of introspection order.
+    pub fn mark_geometry_column(&mut self, column: &str) {
+        let mut columns = self.geometry_columns();
+        if !columns.iter().any(|c| c == column) {
+            columns.push(column.to_string());
+        }
+        columns.sort();
+        columns.dedup();
+        self.meta.insert(
+            Self::GEOMETRY_COLUMNS_META_KEY.to_string(),
+            serde_json::Value::Array(columns.into_iter().map(serde_json::Value::String).collect()),
+        );
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -10,6 +10,55 @@ pub trait Dialect: Send + Sync {
 
     fn generate_sql(&self, plan: &super::generator::LogicalPlan) -> anyhow::Result<String>;
 
+    /// The bind placeholder for the parameter at `index` (1-based).
+    ///
+    /// Filter values are never interpolated into the statement. The generated
+    /// text carries a placeholder here and the value is sent separately, so a
+    /// value cannot change the shape of the statement at all.
+    fn placeholder(&self, index: usize) -> String {
+        let _ = index;
+        "?".to_string()
+    }
+
+    /// Wrap an already-rendered geometry value in a constructor, for use as the
+    /// second argument of a spatial predicate.
+    ///
+    /// `value_sql` is whatever the caller produced: a bind placeholder when
+    /// executing, a quoted literal when displaying. Returning `None` means this
+    /// dialect has no equivalent, and the generator refuses rather than emitting
+    /// SQL the database would reject — so a spatial filter against MySQL or
+    /// SQLite fails at query time with a clear reason instead of at the driver
+    /// with a syntax error.
+    fn spatial_geometry(&self, value_sql: &str, from_wkt: bool) -> Option<String> {
+        let _ = (value_sql, from_wkt);
+        None
+    }
+
+    /// Render a geometry column as GeoJSON for a result set, or `None` where
+    /// the dialect has no spatial support.
+    ///
+    /// A geometry column has no JSON representation the driver can decode, so
+    /// the conversion has to happen in SQL. `ST_AsGeoJSON` returns text, which
+    /// the extraction path already handles, and exists with the same name on
+    /// both PostGIS and DuckDB spatial. MySQL and SQLite return `None` here, and
+    /// the generator refuses a geometry column rather than emitting SQL that
+    /// would fail at the driver.
+    fn geometry_as_geojson(&self, column_sql: &str) -> Option<String> {
+        let _ = column_sql;
+        None
+    }
+
+    /// Render the FROM source. A plain table name is quoted as an identifier;
+    /// a model's custom SQL override is inlined as a subquery. The alias is
+    /// appended by the caller, so it is deliberately not added here.
+    fn render_source(&self, plan: &super::generator::LogicalPlan) -> String {
+        if plan.source_is_sql {
+            let trimmed = plan.source_table.trim().trim_end_matches(';');
+            return format!("({})", trimmed);
+        }
+        self.quote_ident(&plan.source_table)
+    }
+
     fn current_timestamp(&self) -> String;
 
     fn date_trunc(&self, unit: &str, column: &str) -> String;
@@ -36,15 +85,44 @@ pub trait Dialect: Send + Sync {
 }
 
 /// PostgreSQL dialect
+/// Geometry constructor rendering shared by the dialects that implement
+/// OGC-style spatial predicates: PostGIS and DuckDB spatial.
+///
+/// The `CAST` is load-bearing rather than defensive. With a bare prepared
+/// parameter DuckDB fails to resolve the constructor's overload and reports
+/// `ST_GeomFromText requires a string argument`; naming the type fixes it, and
+/// is harmless on Postgres where the function signature already pins the
+/// argument. Both forms were run against a real DuckDB engine.
+fn ogc_geometry_ctor(value_sql: &str, from_wkt: bool) -> String {
+    let ctor = if from_wkt {
+        "ST_GeomFromText"
+    } else {
+        "ST_GeomFromGeoJSON"
+    };
+    format!("{ctor}(CAST({value_sql} AS VARCHAR))")
+}
+
 pub struct PostgresDialect;
 
 impl Dialect for PostgresDialect {
+    fn spatial_geometry(&self, value_sql: &str, from_wkt: bool) -> Option<String> {
+        Some(ogc_geometry_ctor(value_sql, from_wkt))
+    }
+
+    fn geometry_as_geojson(&self, column_sql: &str) -> Option<String> {
+        Some(format!("ST_AsGeoJSON({column_sql})"))
+    }
+
     fn name(&self) -> &str {
         "postgres"
     }
 
     fn quote_ident(&self, ident: &str) -> String {
         format!("\"{}\"", ident.replace("\"", "\"\""))
+    }
+
+    fn placeholder(&self, index: usize) -> String {
+        format!("${index}")
     }
 
     fn format_value(&self, value: &Value) -> String {
@@ -84,7 +162,7 @@ impl Dialect for PostgresDialect {
         sql.push_str(&select_strs.join(", "));
 
         // FROM
-        sql.push_str(&format!(" FROM {} ", self.quote_ident(&plan.source_table)));
+        sql.push_str(&format!(" FROM {} ", self.render_source(plan)));
         sql.push_str(&format!("{} ", self.quote_ident(&plan.source_alias)));
 
         // JOINs
@@ -169,6 +247,24 @@ impl Dialect for PostgresDialect {
 /// MySQL dialect
 pub struct MySqlDialect;
 
+impl MySqlDialect {
+    /// Escape a MySQL string literal.
+    ///
+    /// Backslash first, then the quote. The order is the whole point: MySQL
+    /// treats `\` as an escape character inside string literals by default, so
+    /// a value of `\'` would otherwise become an escaped quote, and the *next*
+    /// quote would close the literal early. Escaping the backslash first means
+    /// `\'` reaches the server as a literal backslash followed by a quote that
+    /// is then itself doubled.
+    ///
+    /// A session with `NO_BACKSLASH_ESCAPES` enabled is also safe: there the
+    /// doubled quote is the correct escape, and the extra backslash is literal
+    /// data rather than an escape. That is the better of the two failure modes.
+    fn escape_literal(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('\'', "''")
+    }
+}
+
 impl Dialect for MySqlDialect {
     fn name(&self) -> &str {
         "mysql"
@@ -181,14 +277,20 @@ impl Dialect for MySqlDialect {
     fn format_value(&self, value: &Value) -> String {
         match value {
             Value::Null => "NULL".to_string(),
-            Value::Bool(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
+            Value::Bool(b) => {
+                if *b {
+                    "TRUE".to_string()
+                } else {
+                    "FALSE".to_string()
+                }
+            }
             Value::Number(n) => n.to_string(),
-            Value::String(s) => format!("'{}'", s.replace("'", "''")),
+            Value::String(s) => format!("'{}'", Self::escape_literal(s)),
             Value::Array(arr) => {
                 let items: Vec<String> = arr.iter().map(|v| self.format_value(v)).collect();
                 format!("JSON_ARRAY({})", items.join(", "))
             }
-            Value::Object(_) => format!("'{}'", value.to_string().replace("'", "''")),
+            Value::Object(_) => format!("'{}'", Self::escape_literal(&value.to_string())),
         }
     }
 
@@ -210,7 +312,7 @@ impl Dialect for MySqlDialect {
             .collect();
         sql.push_str(&select_strs.join(", "));
 
-        sql.push_str(&format!(" FROM {} ", self.quote_ident(&plan.source_table)));
+        sql.push_str(&format!(" FROM {} ", self.render_source(plan)));
         sql.push_str(&format!("{} ", self.quote_ident(&plan.source_alias)));
 
         for join in &plan.joins {
@@ -353,7 +455,7 @@ impl Dialect for SqliteDialect {
             .collect();
         sql.push_str(&select_strs.join(", "));
 
-        sql.push_str(&format!(" FROM {} ", self.quote_ident(&plan.source_table)));
+        sql.push_str(&format!(" FROM {} ", self.render_source(plan)));
         sql.push_str(&format!("{} ", self.quote_ident(&plan.source_alias)));
 
         for join in &plan.joins {
@@ -449,6 +551,14 @@ impl Dialect for SqliteDialect {
 pub struct DuckDbDialect;
 
 impl Dialect for DuckDbDialect {
+    fn spatial_geometry(&self, value_sql: &str, from_wkt: bool) -> Option<String> {
+        Some(ogc_geometry_ctor(value_sql, from_wkt))
+    }
+
+    fn geometry_as_geojson(&self, column_sql: &str) -> Option<String> {
+        Some(format!("ST_AsGeoJSON({column_sql})"))
+    }
+
     fn name(&self) -> &str {
         "duckdb"
     }
@@ -489,7 +599,7 @@ impl Dialect for DuckDbDialect {
             .collect();
         sql.push_str(&select_strs.join(", "));
 
-        sql.push_str(&format!(" FROM {} ", self.quote_ident(&plan.source_table)));
+        sql.push_str(&format!(" FROM {} ", self.render_source(plan)));
         sql.push_str(&format!("{} ", self.quote_ident(&plan.source_alias)));
 
         for join in &plan.joins {
@@ -535,7 +645,13 @@ impl Dialect for DuckDbDialect {
     }
 
     fn date_trunc(&self, unit: &str, column: &str) -> String {
-        format!("DATE_TRUNC('{}', {})", unit, column)
+        if unit == "day" {
+            // Day buckets should carry DATE, not TIMESTAMP (SQLite's
+            // strftime-based day bucket is an ISO date string too).
+            format!("CAST(DATE_TRUNC('day', {}) AS DATE)", column)
+        } else {
+            format!("DATE_TRUNC('{}', {})", unit, column)
+        }
     }
 
     fn cast(&self, expr: &str, target_type: &str) -> String {

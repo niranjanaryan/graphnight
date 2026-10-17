@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
-use graphnight_core::models::{DataSource, Join, JoinType, Measure, Model, TimeDimension};
-use graphnight_core::models::{AggregationType, Dimension, Formula, TimeGranularity};
 use crate::executor::QueryExecutor;
+use anyhow::{anyhow, Result};
+use graphnight_core::models::{AggregationType, Dimension, Formula, TimeGranularity};
+use graphnight_core::models::{DataSource, Join, JoinType, Measure, Model, TimeDimension};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -17,6 +17,13 @@ pub struct TableInfo {
 pub struct ColumnInfo {
     pub name: String,
     pub data_type: String,
+    /// The underlying type name where the driver reports a generic one.
+    ///
+    /// Postgres reports `USER-DEFINED` in `data_type` for extension types such
+    /// as PostGIS `geometry`; the real name is in `udt_name`. Kept alongside
+    /// `data_type` so callers can see both what the catalog claimed and what the
+    /// type actually is.
+    pub udt_name: Option<String>,
     pub is_nullable: bool,
     pub is_primary_key: bool,
     pub default: Option<String>,
@@ -29,14 +36,12 @@ pub struct ForeignKeyInfo {
     pub referenced_column: String,
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct IntrospectionConfig {
     pub include_views: bool,
     pub schema_filter: Option<String>,
     pub table_filter: Option<Vec<String>>,
 }
-
 
 pub struct SchemaIntrospector {
     executor: Arc<QueryExecutor>,
@@ -47,7 +52,11 @@ impl SchemaIntrospector {
         Self { executor }
     }
 
-    pub async fn introspect(&self, ds: &DataSource, config: IntrospectionConfig) -> Result<Vec<TableInfo>> {
+    pub async fn introspect(
+        &self,
+        ds: &DataSource,
+        config: IntrospectionConfig,
+    ) -> Result<Vec<TableInfo>> {
         match ds.driver.as_str() {
             "postgres" | "postgresql" | "pg" => self.introspect_postgres(ds, config).await,
             "mysql" | "mariadb" => self.introspect_mysql(ds, config).await,
@@ -56,10 +65,18 @@ impl SchemaIntrospector {
         }
     }
 
-    async fn introspect_postgres(&self, ds: &DataSource, config: IntrospectionConfig) -> Result<Vec<TableInfo>> {
+    async fn introspect_postgres(
+        &self,
+        ds: &DataSource,
+        config: IntrospectionConfig,
+    ) -> Result<Vec<TableInfo>> {
         let schema = config.schema_filter.unwrap_or_else(|| "public".to_string());
         let table_filter = config.table_filter.map(|tables| {
-            tables.iter().map(|t| format!("'{}'", t)).collect::<Vec<_>>().join(",")
+            tables
+                .iter()
+                .map(|t| format!("'{}'", t))
+                .collect::<Vec<_>>()
+                .join(",")
         });
 
         let tables_sql = if let Some(filter) = table_filter {
@@ -78,17 +95,25 @@ impl SchemaIntrospector {
             )
         };
 
-        let table_rows = self.executor.execute(ds, &tables_sql).await?;
+        let table_rows = self.executor.execute_literal(ds, &tables_sql).await?;
         let table_names: Vec<String> = table_rows
             .into_iter()
-            .filter_map(|row| row.get("table_name").and_then(|v| v.as_str()).map(String::from))
+            .filter_map(|row| {
+                row.get("table_name")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
             .collect();
 
         let mut tables = Vec::new();
         for table_name in table_names {
             let columns = self.get_postgres_columns(ds, &schema, &table_name).await?;
-            let primary_keys = self.get_postgres_primary_keys(ds, &schema, &table_name).await?;
-            let foreign_keys = self.get_postgres_foreign_keys(ds, &schema, &table_name).await?;
+            let primary_keys = self
+                .get_postgres_primary_keys(ds, &schema, &table_name)
+                .await?;
+            let foreign_keys = self
+                .get_postgres_foreign_keys(ds, &schema, &table_name)
+                .await?;
 
             tables.push(TableInfo {
                 name: table_name.clone(),
@@ -108,24 +133,52 @@ impl SchemaIntrospector {
         table: &str,
     ) -> Result<Vec<ColumnInfo>> {
         let sql = format!(
-            r#"SELECT column_name, data_type, is_nullable, column_default
+            r#"SELECT column_name, data_type, udt_name, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_schema = '{}' AND table_name = '{}'
             ORDER BY ordinal_position"#,
             schema, table
         );
 
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         let mut columns = Vec::new();
         for row in rows {
-            let name = row.get("column_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let data_type = row.get("data_type").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let is_nullable = row.get("is_nullable").and_then(|v| v.as_str()).map(|s| s == "YES").unwrap_or(true);
-            let default = row.get("column_default").and_then(|v| v.as_str()).map(String::from);
+            let name = row
+                .get("column_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let reported_type = row
+                .get("data_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let udt_name = row
+                .get("udt_name")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            // `data_type` is `USER-DEFINED` for an extension type such as
+            // PostGIS `geometry`. Prefer the real name from `udt_name` so a
+            // geometry column can be recognised rather than looking like an
+            // opaque user type.
+            let data_type = match (reported_type.as_str(), &udt_name) {
+                ("USER-DEFINED", Some(udt)) if !udt.is_empty() => udt.clone(),
+                _ => reported_type,
+            };
+            let is_nullable = row
+                .get("is_nullable")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "YES")
+                .unwrap_or(true);
+            let default = row
+                .get("column_default")
+                .and_then(|v| v.as_str())
+                .map(String::from);
 
             columns.push(ColumnInfo {
                 name,
                 data_type,
+                udt_name,
                 is_nullable,
                 is_primary_key: false,
                 default,
@@ -153,10 +206,14 @@ impl SchemaIntrospector {
             schema, table
         );
 
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         Ok(rows
             .into_iter()
-            .filter_map(|row| row.get("column_name").and_then(|v| v.as_str()).map(String::from))
+            .filter_map(|row| {
+                row.get("column_name")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
             .collect())
     }
 
@@ -184,7 +241,7 @@ impl SchemaIntrospector {
             schema, table
         );
 
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         let mut fks = Vec::new();
         for row in rows {
             if let (Some(column), Some(ref_table), Some(ref_column)) = (
@@ -202,10 +259,18 @@ impl SchemaIntrospector {
         Ok(fks)
     }
 
-    async fn introspect_mysql(&self, ds: &DataSource, config: IntrospectionConfig) -> Result<Vec<TableInfo>> {
+    async fn introspect_mysql(
+        &self,
+        ds: &DataSource,
+        config: IntrospectionConfig,
+    ) -> Result<Vec<TableInfo>> {
         let schema = config.schema_filter.unwrap_or_default();
         let table_filter = config.table_filter.map(|tables| {
-            tables.iter().map(|t| format!("'{}'", t)).collect::<Vec<_>>().join(",")
+            tables
+                .iter()
+                .map(|t| format!("'{}'", t))
+                .collect::<Vec<_>>()
+                .join(",")
         });
 
         let schema_clause = if schema.is_empty() {
@@ -230,17 +295,25 @@ impl SchemaIntrospector {
             )
         };
 
-        let table_rows = self.executor.execute(ds, &tables_sql).await?;
+        let table_rows = self.executor.execute_literal(ds, &tables_sql).await?;
         let table_names: Vec<String> = table_rows
             .into_iter()
-            .filter_map(|row| row.get("table_name").and_then(|v| v.as_str()).map(String::from))
+            .filter_map(|row| {
+                row.get("table_name")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
             .collect();
 
         let mut tables = Vec::new();
         for table_name in table_names {
             let columns = self.get_mysql_columns(ds, &table_name, &schema).await?;
-            let primary_keys = self.get_mysql_primary_keys(ds, &table_name, &schema).await?;
-            let foreign_keys = self.get_mysql_foreign_keys(ds, &table_name, &schema).await?;
+            let primary_keys = self
+                .get_mysql_primary_keys(ds, &table_name, &schema)
+                .await?;
+            let foreign_keys = self
+                .get_mysql_foreign_keys(ds, &table_name, &schema)
+                .await?;
 
             tables.push(TableInfo {
                 name: table_name.clone(),
@@ -273,17 +346,33 @@ impl SchemaIntrospector {
             table, schema_clause
         );
 
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         let mut columns = Vec::new();
         for row in rows {
-            let name = row.get("column_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let data_type = row.get("data_type").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let is_nullable = row.get("is_nullable").and_then(|v| v.as_str()).map(|s| s == "YES").unwrap_or(true);
-            let default = row.get("column_default").and_then(|v| v.as_str()).map(String::from);
+            let name = row
+                .get("column_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let data_type = row
+                .get("data_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let is_nullable = row
+                .get("is_nullable")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "YES")
+                .unwrap_or(true);
+            let default = row
+                .get("column_default")
+                .and_then(|v| v.as_str())
+                .map(String::from);
 
             columns.push(ColumnInfo {
                 name,
                 data_type,
+                udt_name: None,
                 is_nullable,
                 is_primary_key: false,
                 default,
@@ -314,10 +403,14 @@ impl SchemaIntrospector {
             table, schema_clause
         );
 
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         Ok(rows
             .into_iter()
-            .filter_map(|row| row.get("column_name").and_then(|v| v.as_str()).map(String::from))
+            .filter_map(|row| {
+                row.get("column_name")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
             .collect())
     }
 
@@ -348,7 +441,7 @@ impl SchemaIntrospector {
             table, schema_clause
         );
 
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         let mut fks = Vec::new();
         for row in rows {
             if let (Some(column), Some(ref_table), Some(ref_column)) = (
@@ -366,9 +459,17 @@ impl SchemaIntrospector {
         Ok(fks)
     }
 
-    async fn introspect_sqlite(&self, ds: &DataSource, config: IntrospectionConfig) -> Result<Vec<TableInfo>> {
+    async fn introspect_sqlite(
+        &self,
+        ds: &DataSource,
+        config: IntrospectionConfig,
+    ) -> Result<Vec<TableInfo>> {
         let table_filter = config.table_filter.map(|tables| {
-            tables.iter().map(|t| format!("'{}'", t)).collect::<Vec<_>>().join(",")
+            tables
+                .iter()
+                .map(|t| format!("'{}'", t))
+                .collect::<Vec<_>>()
+                .join(",")
         });
 
         let tables_sql = if let Some(filter) = table_filter {
@@ -382,7 +483,7 @@ impl SchemaIntrospector {
             r#"SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"#.to_string()
         };
 
-        let table_rows = self.executor.execute(ds, &tables_sql).await?;
+        let table_rows = self.executor.execute_literal(ds, &tables_sql).await?;
         let table_names: Vec<String> = table_rows
             .into_iter()
             .filter_map(|row| row.get("name").and_then(|v| v.as_str()).map(String::from))
@@ -408,18 +509,30 @@ impl SchemaIntrospector {
 
     async fn get_sqlite_columns(&self, ds: &DataSource, table: &str) -> Result<Vec<ColumnInfo>> {
         let sql = format!("PRAGMA table_info({})", table);
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         let mut columns = Vec::new();
         for row in rows {
-            let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let data_type = row.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let name = row
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let data_type = row
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let not_null = row.get("notnull").and_then(|v| v.as_i64()).unwrap_or(0) == 1;
             let is_pk = row.get("pk").and_then(|v| v.as_i64()).unwrap_or(0) == 1;
-            let default = row.get("dflt_value").and_then(|v| v.as_str()).map(String::from);
+            let default = row
+                .get("dflt_value")
+                .and_then(|v| v.as_str())
+                .map(String::from);
 
             columns.push(ColumnInfo {
                 name,
                 data_type,
+                udt_name: None,
                 is_nullable: !not_null,
                 is_primary_key: is_pk,
                 default,
@@ -430,7 +543,7 @@ impl SchemaIntrospector {
 
     async fn get_sqlite_primary_keys(&self, ds: &DataSource, table: &str) -> Result<Vec<String>> {
         let sql = format!("PRAGMA table_info({})", table);
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         Ok(rows
             .into_iter()
             .filter(|row| row.get("pk").and_then(|v| v.as_i64()).unwrap_or(0) == 1)
@@ -438,9 +551,13 @@ impl SchemaIntrospector {
             .collect())
     }
 
-    async fn get_sqlite_foreign_keys(&self, ds: &DataSource, table: &str) -> Result<Vec<ForeignKeyInfo>> {
+    async fn get_sqlite_foreign_keys(
+        &self,
+        ds: &DataSource,
+        table: &str,
+    ) -> Result<Vec<ForeignKeyInfo>> {
         let sql = format!("PRAGMA foreign_key_list({})", table);
-        let rows = self.executor.execute(ds, &sql).await?;
+        let rows = self.executor.execute_literal(ds, &sql).await?;
         let mut fks = Vec::new();
         for row in rows {
             if let (Some(column), Some(ref_table), Some(ref_column)) = (
@@ -525,7 +642,7 @@ pub fn infer_model_from_table(
         }
     }
 
-    Model {
+    let mut model = Model {
         name: model_name,
         datasource: datasource_name.to_string(),
         description: Some(format!("Auto-generated from table {}", table_name)),
@@ -535,7 +652,22 @@ pub fn infer_model_from_table(
         joins,
         sql: None,
         meta: HashMap::new(),
+    };
+
+    // A geometry column is otherwise indistinguishable: it is not numeric or
+    // temporal, so it becomes a plain dimension. Recording it here is what lets
+    // the generator return it as GeoJSON instead of failing at extraction.
+    for column in &table.columns {
+        let type_name = column
+            .udt_name
+            .as_deref()
+            .unwrap_or(column.data_type.as_str());
+        if is_geometry_type(type_name) {
+            model.mark_geometry_column(&column.name);
+        }
     }
+
+    model
 }
 
 fn to_snake_case(s: &str) -> String {
@@ -572,16 +704,51 @@ fn to_title_case(s: &str) -> String {
 fn is_numeric_type(data_type: &str) -> bool {
     matches!(
         data_type,
-        "integer" | "int" | "bigint" | "smallint" | "tinyint" | "mediumint"
-            | "decimal" | "numeric" | "float" | "double" | "real" | "double precision"
-            | "money" | "serial" | "bigserial" | "smallserial"
+        "integer"
+            | "int"
+            | "bigint"
+            | "smallint"
+            | "tinyint"
+            | "mediumint"
+            | "decimal"
+            | "numeric"
+            | "float"
+            | "double"
+            | "real"
+            | "double precision"
+            | "money"
+            | "serial"
+            | "bigserial"
+            | "smallserial"
     )
+}
+
+/// Recognise a spatial column type from a type name.
+///
+/// PostGIS names the type `geometry` or `geography`; DuckDB's spatial extension
+/// uses `geometry`. A type may carry a subtype and SRID in parentheses, such as
+/// `geometry(Point,4326)`, so only the leading name is significant. Matching is
+/// case-insensitive because catalogs are inconsistent about it.
+fn is_geometry_type(data_type: &str) -> bool {
+    let base = data_type
+        .split('(')
+        .next()
+        .unwrap_or(data_type)
+        .trim()
+        .to_ascii_lowercase();
+    matches!(base.as_str(), "geometry" | "geography")
 }
 
 fn is_temporal_type(data_type: &str) -> bool {
     matches!(
         data_type,
-        "date" | "time" | "timestamp" | "timestamptz" | "timestamp with time zone"
-            | "timestamp without time zone" | "datetime" | "year"
+        "date"
+            | "time"
+            | "timestamp"
+            | "timestamptz"
+            | "timestamp with time zone"
+            | "timestamp without time zone"
+            | "datetime"
+            | "year"
     )
 }
